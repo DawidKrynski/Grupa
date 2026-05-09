@@ -1,6 +1,6 @@
 # Sklep rowerowy - projekt nr 4
 
-## Członkowie zespołu
+## Członkowie zespołu C
 
 - Dawid Kryński
 - Julia Zezula
