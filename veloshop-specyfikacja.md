@@ -1,136 +1,398 @@
-# VeloShop - internetowy sklep rowerowy
+# VeloShop sklep rowerowy - projekt nr 4 Grupy C
 
-## 1. Zagadnienia biznesowe
+## Członkowie zespołu
 
-### 1.1 Opis problemu
+- Dawid Kryński
+- Julia Zezula
+- Kuba Wykocki
+- Piotr Makoś
 
-VeloShop to internetowa platforma sprzedaży rowerów i akcesoriów rowerowych, obsługująca pełen cykl życia zamówienia: od przeglądania katalogu, przez złożenie zamówienia i płatność, aż po ewentualną naprawę lub serwis roweru. System kierowany jest zarówno do klientów indywidualnych, jak i do personelu serwisu rowerowego.
+---
 
-### 1.2 Aktorzy systemu
+# 1. Zagadnienie biznesowe
 
-- Klient (niezalogowany) - przegląda katalog rowerów, widzi ceny i dostępność
-- Klient (zalogowany) - składa zamówienia, śledzi status, zgłasza naprawy
-- Administrator / Pracownik - Zarządza katalogiem produktów, obsługuje zamówienia i serwis
+VeloShop to internetowa platforma sprzedaży rowerów, części i akcesoriów rowerowych z dodatkową obsługą serwisu naprawczego.
 
-### 1.3 Główne procesy biznesowe
+System ma umożliwiać przeglądanie katalogu, składanie zamówień, obsługę płatności, zgłaszanie napraw oraz śledzenie statusu zamówień i napraw.
 
-- Zakup roweru
-- Zarządzanie katalogiem
-- Obsługa zamówień
-- Serwis i naprawa
-- Autentykacja
+## 1.1 Aktorzy systemu
 
+- Klient niezalogowany - przegląda produkty, filtruje katalog i korzysta z koszyka.
+- Klient zalogowany - składa zamówienia, płaci, sprawdza status zamówień i zgłasza naprawy.
+- Administrator / pracownik - zarządza produktami, zamówieniami i naprawami.
 
-## Etap 2 - Wymagania funkcjonalne
+## 1.2 Główne procesy biznesowe
 
-### 2.1 user-service
+- zakup rowerów, części i akcesoriów,
+- zarządzanie katalogiem,
+- obsługa zamówień,
+- obsługa płatności,
+- zgłaszanie i obsługa napraw,
+- autentykacja użytkowników.
 
-Odpowiada za rejestrację, logowanie i zarządzanie profilami użytkowników. Wydaje tokeny JWT podpisane wspólnym sekretem. Udostępnia też `authMiddleware.js` używany przez pozostałe serwisy do weryfikacji tożsamości. Obsługuje dwie role: `customer` i `admin`.
+---
 
-- `POST /auth/register` - rejestracja nowego użytkownika
-  ```json
-  { 
-    "firstName": "Jan", 
-    "lastName": "Kowalski", 
-    "email": "jan@example.com", 
-    "password": "haslo123" 
-  }
-  ```
-- `POST /auth/login` - logowanie, zwraca token JWT
-  ```json
-  { 
-   "email": "jan@example.com",
-   "password": "haslo123"
-  }
-  ```
-- `GET /users/me` - profil zalogowanego użytkownika (wymaga JWT)
+# 2. Wymagania funkcjonalne
 
-### 2.2 product-service
+## 2.1 Wymagania ogólne
 
-Przechowuje katalog rowerów i akcesoriów. Obsługuje stany magazynowe i umożliwia filtrowanie po kategorii, marce i cenie. Udostępnia też endpoint wewnętrzny do rezerwacji towaru uzywany przez order-service i repair-service.
+- Użytkownik może przeglądać i filtrować produkty.
+- Użytkownik może dodawać i usuwać produkty z koszyka.
+- Użytkownik może utworzyć konto i zalogować się.
+- Zalogowany użytkownik może złożyć i opłacić zamówienie.
+- Zalogowany użytkownik może sprawdzić status zamówienia.
+- Użytkownik może przeglądać dostępne terminy napraw.
+- Zalogowany użytkownik może zgłosić naprawę roweru.
+- Zalogowany użytkownik może sprawdzić status naprawy.
+- System obsługuje mockowe płatności.
+- System może symulować nieudaną płatność.
+- Administrator może zarządzać produktami, zamówieniami i naprawami.
 
-- `GET /products` - lista produktów, query params: `?category=&brand=&minPrice=&maxPrice=&available=`
-- `GET /products/:id` - szczegóły produktu
-- `POST /products` - dodanie produktu (wymaga JWT, rola admin)
-  ```json
-  { 
-  "name": "Trek Marlin 5", 
-  "brand": "Trek", 
-  "category": "MTB", 
-  "price": 2499, 
-  "stock": 10, 
-  "description": "...", 
-  "imageUrl": "..." 
-  }
-  ```
-- `DELETE /products/:id` - usuniecie produktu (wymaga JWT, rola admin)
-- `POST /products/:id/reserve` - rezerwacja sztuk towaru *(endpoint wewnętrzny, między serwisami)*
-  ```json
-  { "quantity": 2 }
-  ```
+---
 
-### 2.3 order-service
+## 2.2 User Service
 
-Obsługuje pełen cykl zamówienia: przyjęcie koszyka, weryfikacja dostępności wpProduc-service, zainicjowanie płatności w payment-service, finalizacja. Administrator może ręcznie zmieniać status wysyłki.
+Odpowiada za rejestrację, logowanie i zarządzanie profilami użytkowników.
 
-- `POST /orders` - złożenie zamówienia (wymaga JWT)
-  ```json
-  {
-    "items": [{ "productId": 3, "quantity": 1 }, 
-  { "productId": 7, "quantity": 2 }],
-    "deliveryAddress": "ul. Rowerowa 1, Warszawa",
-    "paymentMethod": "card"
-  }
-  ```
-- `GET /orders` - lista zamówień zalogowanego użytkownika (wymaga JWT)
-- `GET /orders/:id` - szczegóły zamówienia (wymaga JWT)
+Serwis wydaje tokeny JWT podpisane wspólnym sekretem. Udostępnia też `authMiddleware.js`, używany przez pozostałe serwisy do weryfikacji tożsamości.
 
-### 2.4 payment-service
+Role:
+
+- `customer`
+- `admin`
+
+Endpointy:
+
+```txt
+POST /auth/register
+POST /auth/login
+GET /users/me
+````
+
+### POST `/auth/register`
+
+```json
+{
+  "firstName": "Jan",
+  "lastName": "Kowalski",
+  "email": "jan@example.com",
+  "password": "haslo123"
+}
+```
+
+### POST `/auth/login`
+
+```json
+{
+  "email": "jan@example.com",
+  "password": "haslo123"
+}
+```
+
+`GET /users/me` wymaga JWT.
+
+---
+
+## 2.3 Product Service
+
+Odpowiada za katalog produktów i stany magazynowe.
+
+Zakres:
+
+* lista produktów,
+* szczegóły produktu,
+* filtrowanie po kategorii, marce, cenie i dostępności,
+* ceny,
+* stany magazynowe,
+* rezerwacja produktów przez Order Service i Repair Service.
+
+Endpointy:
+
+```txt
+GET /products
+GET /products/:id
+POST /products
+DELETE /products/:id
+POST /products/:id/reserve
+```
+
+### GET `/products`
+
+Query params:
+
+```txt
+category=&brand=&minPrice=&maxPrice=&available=
+```
+
+### POST `/products`
+
+Wymaga JWT i roli `admin`.
+
+```json
+{
+  "name": "Trek Marlin 5",
+  "brand": "Trek",
+  "category": "MTB",
+  "price": 2499,
+  "stock": 10,
+  "description": "...",
+  "imageUrl": "..."
+}
+```
+
+### POST `/products/:id/reserve`
+
+Endpoint wewnętrzny używany przez Order Service i Repair Service.
+
+```json
+{
+  "quantity": 2
+}
+```
+
+---
+
+## 2.4 Order Service
+
+Odpowiada za pełen cykl zamówienia: przyjęcie koszyka, weryfikację dostępności w Product Service, zainicjowanie płatności w Payment Service oraz finalizację.
+
+Endpointy:
+
+```txt
+POST /orders
+GET /orders
+GET /orders/:id
+PATCH /orders/:id/status
+```
+
+### POST `/orders`
+
+Wymaga JWT.
+
+```json
+{
+  "items": [
+    {
+      "productId": 3,
+      "quantity": 1
+    },
+    {
+      "productId": 7,
+      "quantity": 2
+    }
+  ],
+  "deliveryAddress": "ul. Rowerowa 1, Warszawa",
+  "paymentMethod": "card"
+}
+```
+
+Przykładowe statusy:
+
+```txt
+pending
+paid
+failed
+shipped
+completed
+cancelled
+```
+
+---
+
+## 2.5 Payment Service
 
 Mockowa bramka płatności. Symuluje przetwarzanie transakcji.
 
-- `POST /payments` - zainicjowanie płatności
-  ```json
-  { "orderId": 15, "amount": 2499.00, "paymentMethod": "card" }
-  ```
+Endpointy:
 
+```txt
+POST /payments
+GET /payments/:id
+```
 
-### 2.5 repair-service
+### POST `/payments`
 
-Obsługuje zlecenia serwisowe niezależnie od modułu sprzedaży. Klient zgłasza usterkę, opisując rower (może wskazać produkt z katalogu Product Service lub podać własny opis). Serwisant aktualizuje status i dodaje notatki. Serwis odpytuje Product Service po dostępne części zamienne.
+```json
+{
+  "orderId": 15,
+  "amount": 2499.00,
+  "paymentMethod": "card"
+}
+```
 
-- `POST /repairs` - zgłoszenie naprawy (wymaga JWT)
-  ```json
-  { 
-  "productId": 3, 
+Przykładowe statusy:
+
+```txt
+pending
+success
+failed
+```
+
+---
+
+## 2.6 Repair Service
+
+Odpowiada za obsługę zleceń serwisowych.
+
+Klient zgłasza usterkę, opisując rower. Może wskazać produkt z katalogu Product Service albo podać własny opis. Serwisant aktualizuje status i dodaje notatki. Serwis może odpytywać Product Service o dostępne części zamienne oraz zlecać płatność w Payment Service.
+
+Endpointy:
+
+```txt
+GET /repair-services
+GET /repair-slots
+POST /repairs
+GET /repairs
+GET /repairs/:id
+PATCH /repairs/:id/status
+```
+
+### POST `/repairs`
+
+Wymaga JWT.
+
+```json
+{
+  "productId": 3,
   "bikeDescription": "Trek Marlin 5, 2022",
-  "issueDescription": "Pęknięta rama, przeskakujące biegi" 
-  }
-  ```
-- `GET /repairs` - lista zleceń; klient widzi swoje, admin/serwisant widzi wszystkie *(wymaga JWT)*
-- `PATCH /repairs/:id/status` - zmiana statusu (wymaga JWT, rola admin)
-  ```json
-  { "status": "in_progress" }
-  ```
+  "issueDescription": "Pęknięta rama, przeskakujące biegi",
+  "repairServiceId": 2,
+  "slotId": 5
+}
+```
 
-### 2.6 frontend-react
+### PATCH `/repairs/:id/status`
 
-Interfejs obsługujący wszystkie widoki klienta i administratora.
+Wymaga JWT i roli `admin`.
 
-- Strona główna z polecanymi produktami
-- Katalog rowerów z filtrowaniem i wyszukiwaniem
-- Karta produktu ze szczegółami i przyciskiem „dodaj do koszyka"
-- Koszyk i proces zakupowy krok po kroku (koszyk > dane dostawy > płatność > potwierdzenie)
-- Panel użytkownika: historia zamówień, profil, zgłoszenia serwisowe
-- Panel administratora: zarządzanie produktami, zmiana statusów zamówień i napraw
-- Formularz zgłoszenia naprawy i widok śledzenia statusu
+```json
+{
+  "status": "in_progress"
+}
+```
 
-## 3. Architektura aplikacji
+Przykładowe statusy:
 
-System zbudowany jest w architekturze mikroserwisów. Każdy serwis działa jako niezależna aplikacja Node.js/Express z własną bazą danych SQLite (przez Sequelize). Frontend React komunikuje się bezpośrednio z poszczególnymi serwisami przez REST API.
+```txt
+booked
+accepted
+in_progress
+waiting_for_parts
+ready
+completed
+cancelled
+```
 
-Tożsamość użytkownika przekazywana jest za pomocą tokenu JWT w nagłówku `Authorization: Bearer <token>`.
+---
 
-Diagram komunikacji między serwisami:
+## 2.7 Frontend React
 
-![img](architecture-diagram.jpg)
+Frontend będzie aplikacją React działającą w modelu CSR.
+
+Planowane widoki:
+
+* strona główna,
+* katalog produktów,
+* szczegóły produktu,
+* koszyk,
+* logowanie,
+* rejestracja,
+* proces zamówienia,
+* panel użytkownika,
+* historia zamówień,
+* zgłoszenia napraw,
+* status naprawy,
+* panel administratora.
+
+---
+
+# 3. Architektura aplikacji
+
+System zostanie zbudowany w architekturze mikroserwisów.
+
+Każdy serwis backendowy będzie osobną aplikacją Node.js/Express z własną bazą SQLite obsługiwaną przez Sequelize.
+
+Frontend React komunikuje się z serwisami przez REST API.
+
+Tożsamość użytkownika będzie przekazywana przez JWT:
+
+```txt
+Authorization: Bearer <token>
+```
+
+## 3.1 Serwisy systemu
+
+* Frontend React
+* User Service
+* Product Service
+* Order Service
+* Payment Service
+* Repair Service
+
+## 3.2 Komunikacja między serwisami
+
+Zgodnie z diagramem:
+
+* użytkownik składa zamówienie przez Order Service,
+* użytkownik zleca naprawę przez Repair Service,
+* Order Service autoryzuje użytkownika przez User Service,
+* Repair Service autoryzuje użytkownika przez User Service,
+* Order Service rezerwuje produkty w Product Service,
+* Repair Service rezerwuje produkty w Product Service,
+* Order Service zleca płatność w Payment Service,
+* Repair Service zleca płatność w Payment Service.
+
+## 3.3 Diagram komunikacji
+
+![Diagram architektury](architecture-diagram.jpg)
+
+## 3.4 Warstwowa struktura serwisów
+
+Każdy serwis będzie miał podział:
+
+```txt
+Routes
+  -> Controllers
+      -> Services
+          -> Models
+              -> SQLite Database
+```
+
+## 3.5 Bazy danych
+
+Każdy serwis posiada własną bazę SQLite.
+
+Planowany podział:
+
+* User Service - użytkownicy, role, dane logowania.
+* Product Service - produkty, kategorie, marki, ceny, stany magazynowe.
+* Order Service - zamówienia, pozycje zamówień, statusy.
+* Payment Service - płatności, statusy, kwoty, metody płatności.
+* Repair Service - usługi, terminy, zgłoszenia, statusy, notatki serwisanta.
+
+---
+
+# 4. Technologie
+
+* Node.js LTS
+* Express
+* Sequelize
+* SQLite
+* React
+* REST API
+* JWT
+* CORS
+
+---
+
+# 5. Podsumowanie
+
+Projekt VeloShop zakłada stworzenie sklepu rowerowego z obsługą zamówień, płatności i napraw.
+
+Aplikacja będzie składać się z frontendu React oraz pięciu backendowych serwisów REST:
+
+* User Service
+* Product Service
+* Order Service
+* Payment Service
+* Repair Service
