@@ -1,0 +1,12 @@
+openapi: 3.0.3
+info:
+  title: VeloShop API
+  version: 0.1.0
+  description: Wspólny szkic API dla projektu mikroserwisowego VeloShop.
+tags:
+  - name: Serwis użytkowników
+  - name: Serwis produktów
+  - name: Serwis zamówień
+  - name: Serwis płatności
+  - name: Serwis napraw
+paths: {}
