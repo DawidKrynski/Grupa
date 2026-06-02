@@ -1,17 +1,24 @@
 const cors = require("cors");
 const express = require("express");
+const path = require("path");
+const swaggerUi = require("swagger-ui-express");
+const YAML = require("yamljs");
 const { Op } = require("sequelize");
 const { authMiddleware, requireAdmin } = require("./auth");
 const { Repair, RepairService, sequelize } = require("./db");
 
 const app = express();
 const port = process.env.PORT || 4005;
+const openApiPath = path.resolve(__dirname, "../../../docs/openapi.yaml");
+const swaggerDocument = YAML.load(openApiPath);
 const WORK_HOURS_PER_DAY = 8;
 const ACTIVE_STATUSES = ["booked", "accepted", "in_progress", "ready"];
 const FINAL_STATUSES = ["completed", "cancelled"];
 
 app.use(cors());
 app.use(express.json());
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.get("/openapi.yaml", (req, res) => res.sendFile(openApiPath));
 
 const repairInclude = [{ model: RepairService }];
 

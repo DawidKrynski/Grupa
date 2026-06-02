@@ -2,15 +2,22 @@ const bcrypt = require("bcryptjs");
 const cors = require("cors");
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const path = require("path");
+const swaggerUi = require("swagger-ui-express");
+const YAML = require("yamljs");
 const { Op } = require("sequelize");
 const { authMiddleware, JWT_SECRET } = require("./authMiddleware");
 const { sequelize, User } = require("./db");
 
 const app = express();
 const port = process.env.PORT || 4001;
+const openApiPath = path.resolve(__dirname, "../../../docs/openapi.yaml");
+const swaggerDocument = YAML.load(openApiPath);
 
 app.use(cors());
 app.use(express.json());
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.get("/openapi.yaml", (req, res) => res.sendFile(openApiPath));
 
 function publicUser(user) {
   return {

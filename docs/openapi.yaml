@@ -2,11 +2,592 @@ openapi: 3.0.3
 info:
   title: VeloShop API
   version: 0.1.0
-  description: Wspólny szkic API dla projektu mikroserwisowego VeloShop.
+  description: API dla serwisu użytkowników i serwisu napraw rowerowych.
+servers:
+  - url: http://localhost:4001
+    description: User Service
+  - url: http://localhost:4005
+    description: Repair Service
 tags:
-  - name: Serwis użytkowników
-  - name: Serwis produktów
-  - name: Serwis zamówień
-  - name: Serwis płatności
-  - name: Serwis napraw
-paths: {}
+  - name: User Service
+  - name: Repair Service
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags:
+        - User Service
+        - Repair Service
+      summary: Status serwisu
+      security: []
+      responses:
+        "200":
+          description: Serwis działa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /auth/register:
+    servers:
+      - url: http://localhost:4001
+    post:
+      tags:
+        - User Service
+      summary: Rejestracja użytkownika
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              firstName: Jan
+              lastName: Kowalski
+              email: jan@example.com
+              password: haslo123
+      responses:
+        "201":
+          description: Konto utworzone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /auth/login:
+    servers:
+      - url: http://localhost:4001
+    post:
+      tags:
+        - User Service
+      summary: Logowanie użytkownika
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              user:
+                value:
+                  login: user
+                  password: user
+              admin:
+                value:
+                  login: admin
+                  password: admin
+      responses:
+        "200":
+          description: Zalogowano
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /users/me:
+    servers:
+      - url: http://localhost:4001
+    get:
+      tags:
+        - User Service
+      summary: Dane zalogowanego użytkownika
+      responses:
+        "200":
+          description: Dane konta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /repair-services:
+    servers:
+      - url: http://localhost:4005
+    get:
+      tags:
+        - Repair Service
+      summary: Lista typów napraw
+      security: []
+      responses:
+        "200":
+          description: Typy napraw
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RepairService"
+  /repair-calendar:
+    servers:
+      - url: http://localhost:4005
+    get:
+      tags:
+        - Repair Service
+      summary: Kalendarz dostępności napraw
+      security: []
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          example: "2026-06-02"
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+          example: 21
+      responses:
+        "200":
+          description: Dostępność dni
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CalendarDay"
+  /repair-estimate:
+    servers:
+      - url: http://localhost:4005
+    post:
+      tags:
+        - Repair Service
+      summary: Wycena terminu odbioru
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepairEstimateRequest"
+            example:
+              repairServiceId: 4
+              dropOffDate: "2026-06-02"
+      responses:
+        "200":
+          description: Szacowany termin odbioru
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepairEstimateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /repairs:
+    servers:
+      - url: http://localhost:4005
+    get:
+      tags:
+        - Repair Service
+      summary: Lista zleceń napraw
+      description: Klient widzi własne zlecenia, administrator widzi wszystkie.
+      responses:
+        "200":
+          description: Lista zleceń
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Repair"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags:
+        - Repair Service
+      summary: Złożenie zlecenia naprawy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRepairRequest"
+            example:
+              bikeDescription: Rower trekkingowy
+              issueDescription: Problem z hamulcami
+              repairServiceId: 2
+              dropOffDate: "2026-06-02"
+      responses:
+        "201":
+          description: Zlecenie utworzone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repair"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+        - Repair Service
+      summary: Usunięcie wszystkich zleceń napraw
+      description: Endpoint administracyjny.
+      responses:
+        "200":
+          description: Liczba usuniętych zleceń
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                    example: 3
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /repairs/{id}:
+    servers:
+      - url: http://localhost:4005
+    get:
+      tags:
+        - Repair Service
+      summary: Szczegóły zlecenia naprawy
+      parameters:
+        - $ref: "#/components/parameters/RepairId"
+      responses:
+        "200":
+          description: Zlecenie naprawy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repair"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /repairs/{id}/status:
+    servers:
+      - url: http://localhost:4005
+    patch:
+      tags:
+        - Repair Service
+      summary: Zmiana statusu zlecenia
+      description: Endpoint administracyjny.
+      parameters:
+        - $ref: "#/components/parameters/RepairId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRepairStatusRequest"
+            example:
+              status: completed
+      responses:
+        "200":
+          description: Zaktualizowane zlecenie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repair"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    RepairId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1
+  responses:
+    BadRequest:
+      description: Nieprawidłowe dane
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Brak lub nieprawidłowy token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Brak uprawnień
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Nie znaleziono zasobu
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Konflikt danych
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: user-service
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Nieprawidłowy login lub hasło
+    RegisterRequest:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+      properties:
+        firstName:
+          type: string
+          example: Jan
+        lastName:
+          type: string
+          example: Kowalski
+        email:
+          type: string
+          format: email
+          example: jan@example.com
+        password:
+          type: string
+          format: password
+          example: haslo123
+    LoginRequest:
+      type: object
+      required:
+        - password
+      properties:
+        login:
+          type: string
+          description: Login albo email.
+          example: user
+        email:
+          type: string
+          format: email
+          description: Alternatywa dla pola login.
+          example: user@user.user
+        password:
+          type: string
+          format: password
+          example: user
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        login:
+          type: string
+          example: user
+        firstName:
+          type: string
+          example: Klient
+        lastName:
+          type: string
+          example: Testowy
+        email:
+          type: string
+          format: email
+          example: user@user.user
+        role:
+          type: string
+          enum:
+            - customer
+            - admin
+          example: customer
+    RepairService:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Przegląd standardowy
+        description:
+          type: string
+          example: Kontrola napędu, kół, hamulców i dokręcenie osprzętu.
+        durationHours:
+          type: integer
+          example: 4
+        price:
+          type: number
+          example: 149
+    CalendarDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2026-06-02"
+        workingDay:
+          type: boolean
+          example: true
+        bookedHours:
+          type: integer
+          example: 4
+        freeHours:
+          type: integer
+          example: 4
+    RepairEstimateRequest:
+      type: object
+      required:
+        - repairServiceId
+        - dropOffDate
+      properties:
+        repairServiceId:
+          type: integer
+          example: 4
+        dropOffDate:
+          type: string
+          format: date
+          example: "2026-06-02"
+    RepairEstimateResponse:
+      type: object
+      properties:
+        durationHours:
+          type: integer
+          example: 12
+        readyDate:
+          type: string
+          format: date
+          example: "2026-06-03"
+        plan:
+          type: array
+          items:
+            $ref: "#/components/schemas/RepairPlanItem"
+    RepairPlanItem:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2026-06-02"
+        hours:
+          type: integer
+          example: 8
+    CreateRepairRequest:
+      type: object
+      required:
+        - bikeDescription
+        - issueDescription
+        - repairServiceId
+        - dropOffDate
+      properties:
+        bikeDescription:
+          type: string
+          example: Rower trekkingowy
+        issueDescription:
+          type: string
+          example: Problem z hamulcami
+        repairServiceId:
+          type: integer
+          example: 2
+        dropOffDate:
+          type: string
+          format: date
+          example: "2026-06-02"
+    Repair:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        userId:
+          type: integer
+          example: 1
+        userEmail:
+          type: string
+          format: email
+          example: user@user.user
+        productId:
+          type: integer
+          nullable: true
+          example: null
+        bikeDescription:
+          type: string
+          example: Rower trekkingowy
+        issueDescription:
+          type: string
+          example: Problem z hamulcami
+        dropOffDate:
+          type: string
+          format: date
+          example: "2026-06-02"
+        readyDate:
+          type: string
+          format: date
+          example: "2026-06-03"
+        plannedHours:
+          type: integer
+          example: 12
+        status:
+          $ref: "#/components/schemas/RepairStatus"
+        RepairServiceId:
+          type: integer
+          example: 4
+        RepairService:
+          $ref: "#/components/schemas/RepairService"
+    RepairStatus:
+      type: string
+      enum:
+        - booked
+        - accepted
+        - in_progress
+        - ready
+        - completed
+        - cancelled
+      example: booked
+    UpdateRepairStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/RepairStatus"
