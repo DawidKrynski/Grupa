@@ -100,10 +100,36 @@ Odpowiada za usługi naprawy roweru.
 Zakres:
 
 - lista usług serwisowych,
-- dostępne terminy,
-- rezerwacja terminu,
+- kalendarz dostępności serwisu,
+- rezerwacja dnia oddania roweru,
+- szacowanie dnia odbioru na podstawie czasu naprawy,
 - status naprawy,
 - lista napraw użytkownika.
+
+## Uruchomienie
+
+```
+cd services/user-service
+npm install
+npm start
+```
+
+```
+cd services/repair-service
+npm install
+npm start
+```
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
+## Konta testowe
+
+- klient: `user` / `user`
+- administrator: `admin` / `admin`
 
 ## Frontend
 
@@ -119,4 +145,5 @@ Planowane widoki:
 - rejestracja,
 - zamówienia,
 - rezerwacja naprawy,
-- status naprawy.
+- historia napraw,
+- panel konta użytkownika.
