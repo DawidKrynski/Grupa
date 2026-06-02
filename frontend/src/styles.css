@@ -92,6 +92,11 @@ main {
   background: #e9ecef;
 }
 
+.calendar-day.empty {
+  border: 0;
+  background: transparent;
+}
+
 .calendar-day:disabled {
   color: #6c757d;
   opacity: 1;
