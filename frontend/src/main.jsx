@@ -20,16 +20,6 @@ function todayKey() {
   return `${year}-${month}-${day}`;
 }
 
-function weekStartKey(value = new Date()) {
-  const date = new Date(value);
-  const day = date.getDay() || 7;
-  date.setDate(date.getDate() - day + 1);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const monthDay = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${monthDay}`;
-}
-
 function formatDate(value) {
   return new Date(`${value}T12:00:00`).toLocaleDateString("pl-PL", {
     day: "2-digit",
@@ -106,7 +96,7 @@ function App() {
   async function loadPublicData() {
     const [nextServices, nextCalendar] = await Promise.all([
       request(`${REPAIR_API}/repair-services`),
-      request(`${REPAIR_API}/repair-calendar?from=${weekStartKey()}&days=28`)
+      request(`${REPAIR_API}/repair-calendar?from=${todayKey()}&days=21`)
     ]);
 
     setServices(nextServices);
@@ -453,6 +443,7 @@ function AccountPage({ user, repairs, changeStatus, clearHistory }) {
 
 function RepairCalendar({ calendar, selectedDate, setSelectedDate, user }) {
   const weekdays = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Nd"];
+  const leadingEmptyDays = calendar.length ? (new Date(`${calendar[0].date}T12:00:00`).getDay() || 7) - 1 : 0;
 
   return (
     <div className="p-4 bg-white border rounded h-100">
@@ -461,6 +452,9 @@ function RepairCalendar({ calendar, selectedDate, setSelectedDate, user }) {
         {weekdays.map((day) => <div key={day}>{day}</div>)}
       </div>
       <div className="calendar-grid">
+        {Array.from({ length: leadingEmptyDays }).map((_, index) => (
+          <div className="calendar-day empty" key={`empty-${index}`} aria-hidden="true"></div>
+        ))}
         {calendar.map((day) => {
           const availability = day.freeHours === 8 ? "free" : day.freeHours > 0 ? "partial" : "full";
           const disabled = availability === "full";
