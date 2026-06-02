@@ -35,7 +35,7 @@ app.post("/auth/register", async (req, res) => {
   const { firstName, lastName, email, password } = req.body;
 
   if (!firstName || !lastName || !email || !password) {
-    return res.status(400).json({ message: "Uzupelnij wszystkie pola" });
+    return res.status(400).json({ message: "Uzupełnij wszystkie pola" });
   }
 
   const exists = await User.findOne({
@@ -47,7 +47,7 @@ app.post("/auth/register", async (req, res) => {
     }
   });
   if (exists) {
-    return res.status(409).json({ message: "Email lub login jest juz zajety" });
+    return res.status(409).json({ message: "Email lub login jest już zajęty" });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -72,7 +72,7 @@ app.post("/auth/login", async (req, res) => {
   });
 
   if (!user || !(await bcrypt.compare(password || "", user.passwordHash))) {
-    return res.status(401).json({ message: "Nieprawidlowy login lub haslo" });
+    return res.status(401).json({ message: "Nieprawidłowy login lub hasło" });
   }
 
   res.json({
@@ -84,7 +84,7 @@ app.post("/auth/login", async (req, res) => {
 app.get("/users/me", authMiddleware, async (req, res) => {
   const user = await User.findByPk(req.user.id);
   if (!user) {
-    return res.status(404).json({ message: "Uzytkownik nie istnieje" });
+    return res.status(404).json({ message: "Użytkownik nie istnieje" });
   }
 
   res.json(publicUser(user));
@@ -126,6 +126,6 @@ async function seedUsers() {
 
 sequelize.sync({ alter: true }).then(seedUsers).then(() => {
   app.listen(port, () => {
-    console.log(`User Service dziala na porcie ${port}`);
+    console.log(`User Service działa na porcie ${port}`);
   });
 });

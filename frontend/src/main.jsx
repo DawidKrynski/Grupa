@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap-icons/font/bootstrap-icons.css";
 import "./styles.css";
 
 const USER_API = "http://localhost:4001";
@@ -38,7 +39,7 @@ function formatDate(value) {
 
 function statusLabel(status) {
   const labels = {
-    booked: "przyjete",
+    booked: "przyjęte",
     accepted: "zaakceptowane",
     in_progress: "w trakcie",
     ready: "gotowe",
@@ -96,7 +97,7 @@ function App() {
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
-      throw new Error(data?.message || "Blad serwera");
+      throw new Error(data?.message || "Błąd serwera");
     }
 
     return data;
@@ -187,7 +188,7 @@ function App() {
       setRepairs([data, ...repairs]);
       setRepairForm({ bikeDescription: "", issueDescription: "", repairServiceId: "", dropOffDate: todayKey() });
       setEstimate(null);
-      setMessage("Zgloszenie naprawy zapisane.");
+      setMessage("Zgłoszenie naprawy zapisane.");
       await loadPublicData();
     } catch (error) {
       setMessage(error.message);
@@ -212,7 +213,7 @@ function App() {
     });
 
     setRepairs([]);
-    setMessage("Historia napraw zostala wyczyszczona.");
+    setMessage("Historia napraw została wyczyszczona.");
     await loadPublicData();
   }
 
@@ -245,11 +246,28 @@ function App() {
         <div className="container">
           <button className="navbar-brand btn btn-link text-white text-decoration-none fw-semibold p-0" onClick={() => navigate("/")}>VeloShop</button>
           <div className="d-flex align-items-center gap-3 text-white ms-auto">
-            <button className={`btn btn-sm ${path === "/naprawy" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/naprawy")}>Naprawy rowerowe</button>
-            {!user && <button className={`btn btn-sm ${path === "/logowanie" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/logowanie")}>Logowanie</button>}
+            <button className="btn btn-outline-light btn-sm" onClick={() => navigate("/zakupy")}>
+              <i className="bi bi-shop me-1" aria-hidden="true"></i>
+              Zakupy
+            </button>
+            <button className="btn btn-outline-light btn-sm" onClick={() => navigate("/koszyk")}>
+              <i className="bi bi-cart3 me-1" aria-hidden="true"></i>
+              Mój koszyk
+            </button>
+            <button className={`btn btn-sm ${path === "/naprawy" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/naprawy")}>
+              <i className="bi bi-wrench-adjustable-circle me-1" aria-hidden="true"></i>
+              Naprawy rowerowe
+            </button>
+            {!user && (
+              <button className={`btn btn-sm ${path === "/logowanie" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/logowanie")}>
+                <i className="bi bi-person-circle me-1" aria-hidden="true"></i>
+                Logowanie
+              </button>
+            )}
             {user ? (
               <div className="position-relative">
                 <button className="btn btn-outline-light btn-sm" onClick={() => setAccountMenuOpen(!accountMenuOpen)}>
+                  <i className="bi bi-person-circle me-1" aria-hidden="true"></i>
                   {user.login} <span className="dropdown-caret" aria-hidden="true">▾</span>
                 </button>
                 {accountMenuOpen && (
@@ -276,8 +294,8 @@ function App() {
             <div className="col-lg-5">
               {user ? (
                 <section className="p-4 bg-white border rounded">
-                  <h1 className="h4 mb-3">Jestes zalogowany</h1>
-                  <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>Przejdz do mojego konta</button>
+                  <h1 className="h4 mb-3">Jesteś zalogowany</h1>
+                  <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>Przejdź do mojego konta</button>
                 </section>
               ) : (
                 <AuthPanel
@@ -302,7 +320,7 @@ function App() {
           ) : (
             <section className="p-4 bg-white border rounded">
               <h1 className="h4 mb-3">Moje konto</h1>
-              <p className="text-secondary">Zaloguj sie, zeby zobaczyc dane konta i historie napraw.</p>
+              <p className="text-secondary">Zaloguj się, żeby zobaczyć dane konta i historię napraw.</p>
               <button className="btn btn-primary" onClick={() => navigate("/logowanie")}>Logowanie</button>
             </section>
           )
@@ -312,9 +330,9 @@ function App() {
         <section className="row g-4 mb-4">
           <div className="col-12">
             <div className="p-4 bg-white border rounded h-100">
-              <h1 className="h3 mb-3">Rezerwacja napraw rowerow</h1>
+              <h1 className="h3 mb-3">Rezerwacja napraw rowerów</h1>
               <p className="mb-0 text-secondary">
-                Tutaj mozesz sprawdzic mozliwe terminy naprawy swojego roweru, kalendarz terminow pokazuje dni, w ktorych rower mozna oddac do naprawy, a czas pracy zalezy od liczby zgloszen i jest szacowany na podstawie deklarowanej naprawy.
+                Tutaj możesz sprawdzić możliwe terminy naprawy swojego roweru, kalendarz terminów pokazuje dni, w których rower można oddać do naprawy, a czas pracy zależy od liczby zgłoszeń i jest szacowany na podstawie deklarowanej naprawy.
               </p>
             </div>
           </div>
@@ -361,7 +379,7 @@ function HomePage({ navigate }) {
       <p className="text-secondary mb-4">
         TODO: Dodać homepage content
       </p>
-      <button className="btn btn-primary" onClick={() => navigate("/naprawy")}>Przejdz do napraw rowerowych</button>
+      <button className="btn btn-primary" onClick={() => navigate("/naprawy")}>Przejdź do napraw rowerowych</button>
     </section>
   );
 }
@@ -371,7 +389,7 @@ function NotFound({ navigate }) {
     <section className="p-4 bg-white border rounded text-center">
       <h1 className="h3 mb-3">404</h1>
       <p className="text-secondary">Nie znaleziono strony.</p>
-      <button className="btn btn-primary" onClick={() => navigate("/")}>Powrot do strony glownej</button>
+      <button className="btn btn-primary" onClick={() => navigate("/")}>Powrót do strony głównej</button>
     </section>
   );
 }
@@ -387,7 +405,7 @@ function AuthPanel({ authMode, setAuthMode, authForm, setAuthForm, submitAuth })
         {authMode === "register" && (
           <div className="row g-2 mb-2">
             <div className="col">
-              <input className="form-control" placeholder="Imie" value={authForm.firstName} onChange={(event) => setAuthForm({ ...authForm, firstName: event.target.value })} />
+              <input className="form-control" placeholder="Imię" value={authForm.firstName} onChange={(event) => setAuthForm({ ...authForm, firstName: event.target.value })} />
             </div>
             <div className="col">
               <input className="form-control" placeholder="Nazwisko" value={authForm.lastName} onChange={(event) => setAuthForm({ ...authForm, lastName: event.target.value })} />
@@ -395,8 +413,8 @@ function AuthPanel({ authMode, setAuthMode, authForm, setAuthForm, submitAuth })
           </div>
         )}
         <input className="form-control mb-2" placeholder={authMode === "login" ? "Login albo email" : "Email"} value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} />
-        <input className="form-control mb-3" type="password" placeholder="Haslo" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} />
-        <button className="btn btn-primary w-100">{authMode === "login" ? "Zaloguj" : "Utworz konto"}</button>
+        <input className="form-control mb-3" type="password" placeholder="Hasło" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} />
+        <button className="btn btn-primary w-100">{authMode === "login" ? "Zaloguj" : "Utwórz konto"}</button>
         <div className="small text-secondary mt-3">Demo: user/user, admin/admin</div>
       </form>
     </div>
@@ -410,14 +428,14 @@ function AccountPage({ user, repairs, changeStatus, clearHistory }) {
         <section className="p-4 bg-white border rounded h-100">
           <h1 className="h4 mb-3">Moje konto</h1>
           <dl className="mb-0">
-            <dt>Imie i nazwisko</dt>
+            <dt>Imię i nazwisko</dt>
             <dd>{user.firstName} {user.lastName}</dd>
             <dt>Email</dt>
             <dd>{user.email}</dd>
             <dt>Login</dt>
             <dd>{user.login}</dd>
             <dt>Typ konta</dt>
-            <dd>{user.role === "admin" ? "Wlasciciel" : "Klient"}</dd>
+            <dd>{user.role === "admin" ? "Właściciel" : "Klient"}</dd>
           </dl>
         </section>
       </div>
@@ -434,11 +452,11 @@ function AccountPage({ user, repairs, changeStatus, clearHistory }) {
 }
 
 function RepairCalendar({ calendar, selectedDate, setSelectedDate, user }) {
-  const weekdays = ["Pon", "Wt", "Sr", "Czw", "Pt", "Sob", "Nd"];
+  const weekdays = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Nd"];
 
   return (
     <div className="p-4 bg-white border rounded h-100">
-      <h2 className="h5 mb-3">Kalendarz terminow</h2>
+      <h2 className="h5 mb-3">Kalendarz terminów</h2>
       <div className="calendar-weekdays">
         {weekdays.map((day) => <div key={day}>{day}</div>)}
       </div>
@@ -454,8 +472,8 @@ function RepairCalendar({ calendar, selectedDate, setSelectedDate, user }) {
               onClick={() => setSelectedDate(day.date)}
             >
               <span>{formatDate(day.date)}</span>
-              <strong>{availability === "free" ? "wolny" : availability === "partial" ? "czesciowo zajety" : "brak terminu"}</strong>
-              {user?.role === "admin" && <small>{day.freeHours}h wolne / {day.bookedHours}h zajete</small>}
+              <strong>{availability === "free" ? "wolny" : availability === "partial" ? "częściowo zajęty" : "brak terminu"}</strong>
+              {user?.role === "admin" && <small>{day.freeHours}h wolne / {day.bookedHours}h zajęte</small>}
             </button>
           );
         })}
@@ -468,27 +486,27 @@ function RepairBooking({ user, services, repairForm, setRepairForm, estimate, su
   return (
     <div className="p-4 bg-white border rounded h-100">
       <h2 className="h5 mb-3">Zlecenie naprawy</h2>
-      {!user && <div className="alert alert-warning py-2">Zaloguj sie, zeby zlozyc zlecenie.</div>}
+      {!user && <div className="alert alert-warning py-2">Zaloguj się, żeby złożyć zlecenie.</div>}
       <form onSubmit={submitRepair}>
         <select className="form-select mb-2" value={repairForm.repairServiceId} onChange={(event) => setRepairForm({ ...repairForm, repairServiceId: event.target.value })}>
           <option value="">Wybierz rodzaj naprawy</option>
           {services.map((service) => (
             <option key={service.id} value={service.id}>
-              {service.name} - {service.durationHours}h - {service.price} zl
+              {service.name} - {service.durationHours}h - {service.price} zł
             </option>
           ))}
         </select>
-        <div className="form-control mb-2 bg-light">Dzien oddania: {repairForm.dropOffDate}</div>
+        <div className="form-control mb-2 bg-light">Dzień oddania: {repairForm.dropOffDate}</div>
         <input className="form-control mb-2" placeholder="Opis roweru" value={repairForm.bikeDescription} onChange={(event) => setRepairForm({ ...repairForm, bikeDescription: event.target.value })} />
         <textarea className="form-control mb-3" rows="3" placeholder="Opis usterki" value={repairForm.issueDescription} onChange={(event) => setRepairForm({ ...repairForm, issueDescription: event.target.value })} />
         {estimate && (
           <div className="alert alert-light border py-2">
             <div>Oddanie: {repairForm.dropOffDate}</div>
-            <div>Szacowany odbior: {estimate.readyDate}</div>
+            <div>Szacowany odbiór: {estimate.readyDate}</div>
             <div>Czas pracy: {estimate.durationHours}h</div>
           </div>
         )}
-        <button className="btn btn-primary w-100" disabled={!user}>Zloz zlecenie</button>
+        <button className="btn btn-primary w-100" disabled={!user}>Złóż zlecenie</button>
       </form>
     </div>
   );
@@ -500,11 +518,11 @@ function RepairHistory({ user, repairs, changeStatus, clearHistory }) {
       <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
         <h2 className="h5 mb-0">{user?.role === "admin" ? "Panel napraw" : "Historia moich napraw"}</h2>
         {user?.role === "admin" && (
-          <button className="btn btn-outline-danger btn-sm" onClick={clearHistory}>Wyczysc historie napraw</button>
+          <button className="btn btn-outline-danger btn-sm" onClick={clearHistory}>Wyczyść historię napraw</button>
         )}
       </div>
-      {!user && <p className="text-secondary mb-0">Historia jest dostepna po zalogowaniu.</p>}
-      {user && repairs.length === 0 && <p className="text-secondary mb-0">Brak zlecen.</p>}
+      {!user && <p className="text-secondary mb-0">Historia jest dostępna po zalogowaniu.</p>}
+      {user && repairs.length === 0 && <p className="text-secondary mb-0">Brak zleceń.</p>}
       <div className="row g-3">
         {repairs.map((repair) => (
           <div className="col-lg-6" key={repair.id}>
@@ -514,7 +532,7 @@ function RepairHistory({ user, repairs, changeStatus, clearHistory }) {
                 <span className="badge text-bg-secondary">{statusLabel(repair.status)}</span>
               </div>
               <div className="small text-secondary">{repair.RepairService?.name} | {repair.plannedHours}h</div>
-              <div className="small text-secondary">Oddanie: {repair.dropOffDate} | Odbior: {repair.readyDate}</div>
+              <div className="small text-secondary">Oddanie: {repair.dropOffDate} | Odbiór: {repair.readyDate}</div>
               <p className="small mt-2 mb-3">{repair.issueDescription}</p>
               {user?.role === "admin" && !["completed", "cancelled"].includes(repair.status) && (
                 <div className="d-flex gap-2">

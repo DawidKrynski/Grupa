@@ -142,12 +142,12 @@ app.post("/repair-estimate", async (req, res) => {
   const { repairServiceId, dropOffDate } = req.body;
 
   if (!repairServiceId || !dropOffDate) {
-    return res.status(400).json({ message: "Wybierz rodzaj naprawy i dzien oddania" });
+    return res.status(400).json({ message: "Wybierz rodzaj naprawy i dzień oddania" });
   }
 
   const estimate = await estimateRepair(repairServiceId, dropOffDate);
   if (!estimate) {
-    return res.status(404).json({ message: "Nie znaleziono uslugi" });
+    return res.status(404).json({ message: "Nie znaleziono usługi" });
   }
 
   res.json({
@@ -161,12 +161,12 @@ app.post("/repairs", authMiddleware, async (req, res) => {
   const { bikeDescription, issueDescription, repairServiceId, dropOffDate } = req.body;
 
   if (!bikeDescription || !issueDescription || !repairServiceId || !dropOffDate) {
-    return res.status(400).json({ message: "Uzupelnij dane zgloszenia" });
+    return res.status(400).json({ message: "Uzupełnij dane zgłoszenia" });
   }
 
   const estimate = await estimateRepair(repairServiceId, dropOffDate);
   if (!estimate) {
-    return res.status(404).json({ message: "Nie znaleziono uslugi" });
+    return res.status(404).json({ message: "Nie znaleziono usługi" });
   }
 
   const repair = await Repair.create({
@@ -198,11 +198,11 @@ app.get("/repairs/:id", authMiddleware, async (req, res) => {
   const repair = await Repair.findByPk(req.params.id, { include: repairInclude });
 
   if (!repair) {
-    return res.status(404).json({ message: "Zgloszenie nie istnieje" });
+    return res.status(404).json({ message: "Zgłoszenie nie istnieje" });
   }
 
   if (req.user.role !== "admin" && repair.userId !== req.user.id) {
-    return res.status(403).json({ message: "Brak uprawnien" });
+    return res.status(403).json({ message: "Brak uprawnień" });
   }
 
   res.json(repair);
@@ -210,13 +210,13 @@ app.get("/repairs/:id", authMiddleware, async (req, res) => {
 
 app.patch("/repairs/:id/status", authMiddleware, requireAdmin, async (req, res) => {
   if (![...ACTIVE_STATUSES, ...FINAL_STATUSES].includes(req.body.status)) {
-    return res.status(400).json({ message: "Nieprawidlowy status" });
+    return res.status(400).json({ message: "Nieprawidłowy status" });
   }
 
   const repair = await Repair.findByPk(req.params.id);
 
   if (!repair) {
-    return res.status(404).json({ message: "Zgloszenie nie istnieje" });
+    return res.status(404).json({ message: "Zgłoszenie nie istnieje" });
   }
 
   repair.status = req.body.status || repair.status;
@@ -232,10 +232,10 @@ app.delete("/repairs", authMiddleware, requireAdmin, async (req, res) => {
 
 async function seedData() {
   const services = [
-    { name: "Szybka regulacja", description: "Regulacja hamulcow i przerzutek.", durationHours: 2, price: 89 },
-    { name: "Przeglad standardowy", description: "Kontrola napedu, kol, hamulcow i dokrecenie osprzetu.", durationHours: 4, price: 149 },
-    { name: "Serwis napedu", description: "Wymiana lub czyszczenie lancucha, kasety i linek.", durationHours: 8, price: 249 },
-    { name: "Naprawa powazna", description: "Diagnoza i naprawa wymagajaca pracy przez wiecej niz jeden dzien.", durationHours: 12, price: 399 }
+    { name: "Szybka regulacja", description: "Regulacja hamulców i przerzutek.", durationHours: 2, price: 89 },
+    { name: "Przegląd standardowy", description: "Kontrola napędu, kół, hamulców i dokręcenie osprzętu.", durationHours: 4, price: 149 },
+    { name: "Serwis napędu", description: "Wymiana lub czyszczenie łańcucha, kasety i linek.", durationHours: 8, price: 249 },
+    { name: "Naprawa poważna", description: "Diagnoza i naprawa wymagająca pracy przez więcej niż jeden dzień.", durationHours: 12, price: 399 }
   ];
   const names = services.map((service) => service.name);
 
@@ -257,6 +257,6 @@ async function seedData() {
 
 sequelize.sync({ alter: true }).then(seedData).then(() => {
   app.listen(port, () => {
-    console.log(`Repair Service dziala na porcie ${port}`);
+    console.log(`Repair Service działa na porcie ${port}`);
   });
 });

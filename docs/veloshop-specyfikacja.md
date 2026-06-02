@@ -76,7 +76,7 @@ GET /users/me
   "firstName": "Jan",
   "lastName": "Kowalski",
   "email": "jan@example.com",
-  "password": "haslo123"
+  "password": "hasło123"
 }
 ```
 
@@ -85,7 +85,7 @@ GET /users/me
 ```json
 {
   "email": "jan@example.com",
-  "password": "haslo123"
+  "password": "hasło123"
 }
 ```
 

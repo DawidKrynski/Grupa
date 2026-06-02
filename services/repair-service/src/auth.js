@@ -14,13 +14,13 @@ function authMiddleware(req, res, next) {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
-    res.status(401).json({ message: "Nieprawidlowy token" });
+    res.status(401).json({ message: "Nieprawidłowy token" });
   }
 }
 
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") {
-    return res.status(403).json({ message: "Brak uprawnien" });
+    return res.status(403).json({ message: "Brak uprawnień" });
   }
 
   next();
