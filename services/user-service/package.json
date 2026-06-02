@@ -13,6 +13,8 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "sequelize": "^6.37.3",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
   }
 }
