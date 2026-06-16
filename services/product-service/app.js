@@ -129,6 +129,71 @@ app.get("/products/:id", async (req, res) => {
     }
 });
 
+app.patch("/products/:id/stock", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { stock } = req.body;
+
+        if (stock === undefined || stock < 0) {
+            return res.status(400).json({ message: "Nieprawidłowa wartość stanu magazynowego." });
+        }
+
+        const product = await Product.findByPk(id);
+        if (!product) {
+            return res.status(404).json({ message: "Nie znaleziono produktu." });
+        }
+
+        product.stock = Number(stock);
+        await product.save();
+
+        console.log(`[Product] Zmieniono stan magazynowy produktu #${id} na: ${product.stock}`);
+        res.json(product);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+app.post("/products", async (req, res) => {
+    try {
+        const { name, description, price, imageUrl, category, stock } = req.body;
+
+        if (!name || !price || !category) {
+            return res.status(400).json({ message: "Nazwa, cena i kategoria są wymagane." });
+        }
+
+        const newProduct = await Product.create({
+            name,
+            description: description || "",
+            price: Number(price),
+            imageUrl: imageUrl || "https://images.unsplash.com/vector-1765806167507-64b5553cc6d7?q=80&w=880",
+            category,
+            stock: stock !== undefined ? Number(stock) : 0
+        });
+
+        console.log(`[Product] Dodano nowy produkt: ${newProduct.name} (#${newProduct.id})`);
+        res.status(201).json(newProduct);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+app.delete("/products/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const product = await Product.findByPk(id);
+
+        if (!product) {
+            return res.status(404).json({ message: "Nie znaleziono produktu o podanym ID." });
+        }
+
+        await product.destroy();
+        console.log(`[Product] Usunięto produkt #${id}`);
+        res.json({ success: true, message: "Produkt został pomyślnie usunięty." });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 const PORT = 3002;
 sequelize.authenticate().then(() => {
     seedDatabase().then(() => {
