@@ -18,7 +18,7 @@ app.post("/payments/process", (req, res) => {
         console.log(`[Payment] Płatność dla naprawy #${repairId} na kwotę ${amount} zł ODRZUCONA`);
         return res.status(402).json({
             success: false,
-            message: "Płatność została odrzucona przez bank (błąd 10% mocka)."
+            message: "Płatność została odrzucona."
         });
     }
 
@@ -33,4 +33,4 @@ app.post("/payments/process", (req, res) => {
 });
 
 const PORT = 4006;
-app.listen(PORT, () => console.log(`Payment service ruszył na porcie ${PORT}`));
+app.listen(PORT, () => console.log(`Payment service uruchomiony na porcie ${PORT}`));
