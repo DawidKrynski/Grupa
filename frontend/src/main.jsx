@@ -312,6 +312,53 @@ function App() {
     setAccountMenuOpen(false);
   }
 
+  async function changeProductStock(productId, newStock) {
+    try {
+      const updatedProduct = await request(`${PRODUCT_API}/products/${productId}/stock`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock: Number(newStock) })
+      });
+
+      setSelectedProduct(updatedProduct);
+      setMessage("Stan magazynowy został pomyślnie zaktualizowany.");
+    } catch (error) {
+      setMessage(`Błąd aktualizacji zapasu: ${error.message}`);
+    }
+  }
+
+  async function handleAddProduct(productData) {
+    try {
+      const newProduct = await request(`${PRODUCT_API}/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(productData)
+      });
+
+      setProducts([newProduct, ...products]);
+      setMessage(`Pomyślnie dodano produkt: ${newProduct.name}`);
+
+      await loadCategories();
+    } catch (error) {
+      setMessage(`Błąd dodawania produktu: ${error.message}`);
+    }
+  }
+
+  async function handleIdDeleteProduct(productId) {
+    if (!window.confirm("Czy na pewno chcesz usunąć ten produkt ze sklepu?")) return;
+
+    try {
+      await request(`${PRODUCT_API}/products/${productId}`, {
+        method: "DELETE"
+      });
+
+      setProducts(products.filter(p => p.id !== productId));
+      setMessage("Produkt został pomyślnie usunięty.");
+    } catch (error) {
+      setMessage(`Błąd usuwania produktu: ${error.message}`);
+    }
+  }
+
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
     window.addEventListener("popstate", onPopState);
@@ -369,12 +416,26 @@ function App() {
 
           {path === "/zakupy" && (
               <ProductCatalogPage
-                  products={products} categories={categories} filters={productFilters}
-                  setFilters={setProductFilters} loading={productsLoading} navigate={navigate}
+                  products={products}
+                  categories={categories}
+                  filters={productFilters}
+                  setFilters={setProductFilters}
+                  loading={productsLoading}
+                  navigate={navigate}
+                  user={user}
+                  onAddProduct={handleAddProduct}
+                  onDeleteProduct={handleIdDeleteProduct}
               />
           )}
 
-          {isProductDetailsPath && <ProductDetailsPage product={selectedProduct} navigate={navigate} />}
+          {isProductDetailsPath && (
+              <ProductDetailsPage
+                  product={selectedProduct}
+                  user={user}
+                  onChangeStock={changeProductStock}
+                  navigate={navigate}
+              />
+          )}
 
           {path === "/platnosc" && (
               <PaymentGatePage
@@ -503,10 +564,61 @@ function PaymentGatePage({ pendingPayment, loading, onPay, onCancel }) {
   );
 }
 
-function ProductCatalogPage({ products, categories, filters, setFilters, loading, navigate }) {
+function ProductCatalogPage({ products, categories, filters, setFilters, loading, navigate, user, onAddProduct, onDeleteProduct }) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: "", description: "", price: "", imageUrl: "", category: "", stock: "0"
+  });
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    onAddProduct(newProduct);
+    setNewProduct({ name: "", description: "", price: "", imageUrl: "", category: "", stock: "0" });
+    setShowAddForm(false);
+  }
+
   return (
       <section className="p-4 bg-white border rounded">
-        <h1 className="h3 mb-3">Katalog Produktów</h1>
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h1 className="h3 mb-0">Katalog Produktów</h1>
+
+          {user?.role === "admin" && (
+              <button
+                  className={`btn btn-sm ${showAddForm ? 'btn-secondary' : 'btn-danger'}`}
+                  onClick={() => setShowAddForm(!showAddForm)}
+              >
+                {showAddForm ? "Anuluj" : <><i className="bi bi-plus-circle me-1"></i> Dodaj nowy produkt</>}
+              </button>
+          )}
+        </div>
+
+        {user?.role === "admin" && showAddForm && (
+            <form onSubmit={handleSubmit} className="p-3 bg-light border rounded mb-4 row g-2">
+              <h5 className="h6 text-danger fw-bold mb-2 col-12">Nowy produkt</h5>
+              <div className="col-md-4">
+                <input type="text" className="form-control form-control-sm" placeholder="Nazwa produktu" required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
+              </div>
+              <div className="col-md-4">
+                <input type="text" className="form-control form-control-sm" placeholder="Kategoria (np. Rowery, Akcesoria)" required value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} />
+              </div>
+              <div className="col-md-2">
+                <input type="number" step="0.01" className="form-control form-control-sm" placeholder="Cena (PLN)" required value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
+              </div>
+              <div className="col-md-2">
+                <input type="number" className="form-control form-control-sm" placeholder="Ilość na stanie" value={newProduct.stock} onChange={e => setNewProduct({...newProduct, stock: e.target.value})} />
+              </div>
+              <div className="col-md-8">
+                <input type="text" className="form-control form-control-sm" placeholder="URL do zdjęcia (opcjonalnie)" value={newProduct.imageUrl} onChange={e => setNewProduct({...newProduct, imageUrl: e.target.value})} />
+              </div>
+              <div className="col-md-4">
+                <button type="submit" className="btn btn-success btn-sm w-100">Zapisz produkt w sklepie</button>
+              </div>
+              <div className="col-12">
+                <textarea className="form-control form-control-sm" rows="1" placeholder="Opis produktu" value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})}></textarea>
+              </div>
+            </form>
+        )}
+
         <div className="row g-3 mb-4">
           <div className="col-md-6">
             <input type="text" className="form-control" placeholder="Szukaj produktu..." value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
@@ -518,6 +630,7 @@ function ProductCatalogPage({ products, categories, filters, setFilters, loading
             </select>
           </div>
         </div>
+
         {loading ? <div className="text-center py-4">Ładowanie...</div> : (
             <div className="row g-4">
               {products.map(product => (
@@ -526,9 +639,23 @@ function ProductCatalogPage({ products, categories, filters, setFilters, loading
                       <img src={product.imageUrl} className="card-img-top" alt={product.name} style={{ height: "140px", objectFit: "cover" }} />
                       <div className="card-body d-flex flex-column">
                         <h5 className="card-title h6 text-truncate">{product.name}</h5>
-                        <p className="card-text fw-bold text-primary mb-2">{product.price.toFixed(2)} PLN</p>
-                        <p style={{ fontSize: '12px' }}>Dostępność: {product.stock > 0 ? `${product.stock}` : 'Brak na stanie'}</p>
-                        <button className="btn btn-sm btn-outline-dark mt-auto" onClick={() => navigate(`/produkt/${product.id}`)}>Szczegóły</button>
+                        <p className="card-text fw-bold text-primary mb-1">{product.price.toFixed(2)} PLN</p>
+                        <p className="mb-2 text-muted" style={{ fontSize: '12px' }}>Dostępność: {product.stock > 0 ? `${product.stock} szt.` : 'Brak na stanie'}</p>
+
+                        <div className="d-flex gap-1 mt-auto justify-content-center">
+                          <button className="btn btn-sm btn-outline-dark flex-grow-1" onClick={() => navigate(`/produkt/${product.id}`)}>Szczegóły</button>
+
+                          {user?.role === "admin" && (
+                              <button
+                                  className="btn btn-sm btn-outline-danger"
+                                  title="Usuń produkt"
+                                  onClick={() => onDeleteProduct(product.id)}
+                              >
+                                <i className="bi bi-trash"></i>
+                              </button>
+                          )}
+                        </div>
+
                       </div>
                     </div>
                   </div>
@@ -539,16 +666,31 @@ function ProductCatalogPage({ products, categories, filters, setFilters, loading
   );
 }
 
-function ProductDetailsPage({ product, navigate }) {
+function ProductDetailsPage({ product, user, onChangeStock, navigate }) {
   if (!product) return <div className="p-4 text-center">Ładowanie...</div>;
+
+  const [inputStock, setInputStock] = useState(product.stock);
+
+  useEffect(() => {
+    setInputStock(product.stock);
+  }, [product.stock]);
+
+  function handleStockSubmit(e) {
+    e.preventDefault();
+    onChangeStock(product.id, inputStock);
+  }
+
   return (
       <section className="p-4 bg-white border rounded">
         <button className="btn btn-link p-0 mb-3 text-decoration-none" onClick={() => navigate("/zakupy")}>← Powrót</button>
         <div className="row g-4">
-          <div className="col-md-5"><img src={product.imageUrl} alt={product.name} className="img-fluid rounded border" /></div>
+          <div className="col-md-5">
+            <img src={product.imageUrl} alt={product.name} className="img-fluid rounded border" />
+          </div>
           <div className="col-md-7">
             <h1 className="h3">{product.name}</h1>
             <h2 className="h4 text-danger fw-bold">{product.price.toFixed(2)} PLN</h2>
+
             <div className="mt-2 mb-3">
               <span className="badge bg-light text-dark border p-2">
                 Dostępność: {product.stock > 0 ? (
@@ -558,7 +700,39 @@ function ProductDetailsPage({ product, navigate }) {
               )}
               </span>
             </div>
+
             <p className="mt-3 text-secondary">{product.description}</p>
+
+            <div className="d-flex flex-column gap-3 mt-4" style={{ maxWidth: "300px" }}>
+              <button
+                  className="btn btn-primary"
+                  disabled={product.stock <= 0}
+              >
+                {product.stock > 0 ? "Dodaj do koszyka" : "Produkt niedostępny"}
+              </button>
+
+              {user?.role === "admin" && (
+                  <div className="p-3 bg-light border rounded mt-3">
+                    <h3 className="h6 text-danger fw-bold mb-2"><i className="bi bi-gear-fill me-1"></i> Panel Administratora</h3>
+                    <form onSubmit={handleStockSubmit} className="d-flex gap-2">
+                      <div className="flex-grow-1">
+                        <label className="form-label small text-muted mb-1">Zmień ilość na stanie:</label>
+                        <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            min="0"
+                            value={inputStock}
+                            onChange={(e) => setInputStock(e.target.value)}
+                        />
+                      </div>
+                      <button type="submit" className="btn btn-danger btn-sm align-self-end">
+                        Zapisz
+                      </button>
+                    </form>
+                  </div>
+              )}
+            </div>
+
           </div>
         </div>
       </section>
