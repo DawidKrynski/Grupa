@@ -6,6 +6,8 @@ import "./styles.css";
 
 const USER_API = "http://localhost:4001";
 const REPAIR_API = "http://localhost:4005";
+const PRODUCT_API = "http://localhost:3002";
+const PAYMENT_API = "http://localhost:4006";
 
 const finalStatuses = [
   { value: "completed", label: "Oznacz jako zrealizowane" },
@@ -59,6 +61,15 @@ function App() {
     dropOffDate: todayKey()
   });
 
+  const [pendingPayment, setPendingPayment] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productFilters, setProductFilters] = useState({ search: "", category: "" });
+
   const headers = useMemo(() => ({
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`
@@ -66,6 +77,7 @@ function App() {
 
   useEffect(() => {
     loadPublicData();
+    loadCategories();
   }, []);
 
   useEffect(() => {
@@ -81,6 +93,17 @@ function App() {
       setEstimate(null);
     }
   }, [repairForm.repairServiceId, repairForm.dropOffDate]);
+
+  useEffect(() => {
+    if (path === "/zakupy") loadProducts();
+  }, [path, productFilters]);
+
+  useEffect(() => {
+    if (path.startsWith("/produkt/")) {
+      const productId = path.split("/")[2];
+      if (productId) loadSingleProduct(productId);
+    }
+  }, [path]);
 
   async function request(url, options = {}) {
     const response = await fetch(url, options);
@@ -101,6 +124,39 @@ function App() {
 
     setServices(nextServices);
     setCalendar(nextCalendar);
+  }
+
+  async function loadCategories() {
+    try {
+      const data = await request(`${PRODUCT_API}/products/categories`);
+      setCategories(data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function loadProducts() {
+    setProductsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (productFilters.search) params.append("search", productFilters.search);
+      if (productFilters.category) params.append("category", productFilters.category);
+      const data = await request(`${PRODUCT_API}/products?${params.toString()}`);
+      setProducts(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setProductsLoading(false);
+    }
+  }
+
+  async function loadSingleProduct(id) {
+    try {
+      const data = await request(`${PRODUCT_API}/products/${id}`);
+      setSelectedProduct(data);
+    } catch (err) {
+      setSelectedProduct(null);
+    }
   }
 
   async function loadProfile(nextToken) {
@@ -140,11 +196,9 @@ function App() {
     setMessage("");
 
     try {
-      const path = authMode === "login" ? "/auth/login" : "/auth/register";
-      const body = authMode === "login"
-        ? { login: authForm.email, password: authForm.password }
-        : authForm;
-      const data = await request(`${USER_API}${path}`, {
+      const authPath = authMode === "login" ? "/auth/login" : "/auth/register";
+      const body = authMode === "login" ? { login: authForm.email, password: authForm.password } : authForm;
+      const data = await request(`${USER_API}${authPath}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
@@ -159,29 +213,65 @@ function App() {
     }
   }
 
-  async function submitRepair(event) {
+  function handleGoToPayment(event) {
     event.preventDefault();
     setMessage("");
 
+    if (!repairForm.repairServiceId || !repairForm.bikeDescription || !repairForm.issueDescription) {
+      setMessage("Błąd: Proszę uzupełnić wszystkie pola serwisu.");
+      return;
+    }
+
+    const selectedService = services.find(s => s.id === Number(repairForm.repairServiceId));
+
+    setPendingPayment({
+      form: { ...repairForm },
+      serviceName: selectedService?.name || "Serwis rowerowy",
+      price: selectedService?.price || 0
+    });
+
+    navigate("/platnosc");
+  }
+
+  async function executePaymentAndBooking() {
+    if (!pendingPayment) return;
+    setPaymentLoading(true);
+    setMessage("");
+
     try {
+      const payRes = await fetch(`${PAYMENT_API}/payments/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: pendingPayment.price, repairId: Date.now() })
+      });
+      const payData = await payRes.json().catch(() => null);
+
+      if (!payRes.ok || !payData?.success) {
+        throw new Error(payData?.message || "Transakcja została odrzucona przez bank.");
+      }
+
       const data = await request(`${REPAIR_API}/repairs`, {
         method: "POST",
         headers,
         body: JSON.stringify({
-          bikeDescription: repairForm.bikeDescription,
-          issueDescription: repairForm.issueDescription,
-          repairServiceId: Number(repairForm.repairServiceId),
-          dropOffDate: repairForm.dropOffDate
+          bikeDescription: pendingPayment.form.bikeDescription,
+          issueDescription: pendingPayment.form.issueDescription,
+          repairServiceId: Number(pendingPayment.form.repairServiceId),
+          dropOffDate: pendingPayment.form.dropOffDate
         })
       });
 
       setRepairs([data, ...repairs]);
       setRepairForm({ bikeDescription: "", issueDescription: "", repairServiceId: "", dropOffDate: todayKey() });
       setEstimate(null);
-      setMessage("Zgłoszenie naprawy zapisane.");
+      setPendingPayment(null);
+      setMessage("Płatność zakończona sukcesem! Zlecenie zostało pomyślnie opłacone i zarejestrowane.");
+      navigate("/moje-konto");
       await loadPublicData();
     } catch (error) {
-      setMessage(error.message);
+      setMessage(`Błąd płatności: ${error.message}`);
+    } finally {
+      setPaymentLoading(false);
     }
   }
 
@@ -222,222 +312,486 @@ function App() {
     setAccountMenuOpen(false);
   }
 
+  async function changeProductStock(productId, newStock) {
+    try {
+      const updatedProduct = await request(`${PRODUCT_API}/products/${productId}/stock`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock: Number(newStock) })
+      });
+
+      setSelectedProduct(updatedProduct);
+      setMessage("Stan magazynowy został pomyślnie zaktualizowany.");
+    } catch (error) {
+      setMessage(`Błąd aktualizacji zapasu: ${error.message}`);
+    }
+  }
+
+  async function handleAddProduct(productData) {
+    try {
+      const newProduct = await request(`${PRODUCT_API}/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(productData)
+      });
+
+      setProducts([newProduct, ...products]);
+      setMessage(`Pomyślnie dodano produkt: ${newProduct.name}`);
+
+      await loadCategories();
+    } catch (error) {
+      setMessage(`Błąd dodawania produktu: ${error.message}`);
+    }
+  }
+
+  async function handleIdDeleteProduct(productId) {
+    if (!window.confirm("Czy na pewno chcesz usunąć ten produkt ze sklepu?")) return;
+
+    try {
+      await request(`${PRODUCT_API}/products/${productId}`, {
+        method: "DELETE"
+      });
+
+      setProducts(products.filter(p => p.id !== productId));
+      setMessage("Produkt został pomyślnie usunięty.");
+    } catch (error) {
+      setMessage(`Błąd usuwania produktu: ${error.message}`);
+    }
+  }
+
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const validPath = path === "/" || path === "/naprawy" || path === "/logowanie" || path === "/moje-konto";
+  const isProductDetailsPath = path.startsWith("/produkt/");
+  const validPath = path === "/" || path === "/naprawy" || path === "/logowanie" || path === "/moje-konto" || path === "/zakupy" || path === "/platnosc" || isProductDetailsPath;
 
   return (
-    <div className="app-shell">
-      <nav className="navbar navbar-expand-lg bg-dark navbar-dark">
-        <div className="container">
-          <button className="navbar-brand btn btn-link text-white text-decoration-none fw-semibold p-0" onClick={() => navigate("/")}>VeloShop</button>
-          <div className="d-flex align-items-center gap-3 text-white ms-auto">
-            <button className="btn btn-outline-light btn-sm" onClick={() => navigate("/zakupy")}>
-              <i className="bi bi-shop me-1" aria-hidden="true"></i>
-              Zakupy
-            </button>
-            <button className="btn btn-outline-light btn-sm" onClick={() => navigate("/koszyk")}>
-              <i className="bi bi-cart3 me-1" aria-hidden="true"></i>
-              Mój koszyk
-            </button>
-            <button className={`btn btn-sm ${path === "/naprawy" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/naprawy")}>
-              <i className="bi bi-wrench-adjustable-circle me-1" aria-hidden="true"></i>
-              Naprawy rowerowe
-            </button>
-            {!user && (
-              <button className={`btn btn-sm ${path === "/logowanie" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/logowanie")}>
-                <i className="bi bi-person-circle me-1" aria-hidden="true"></i>
-                Logowanie
+      <div className="app-shell">
+        <nav className="navbar navbar-expand-lg bg-dark navbar-dark">
+          <div className="container">
+            <button className="navbar-brand btn btn-link text-white text-decoration-none fw-semibold p-0" onClick={() => navigate("/")}>VeloShop</button>
+            <div className="d-flex align-items-center gap-3 text-white ms-auto">
+              <button className={`btn btn-sm ${path === "/zakupy" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/zakupy")}>
+                Sklep
               </button>
-            )}
-            {user ? (
-              <div className="position-relative">
-                <button className="btn btn-outline-light btn-sm" onClick={() => setAccountMenuOpen(!accountMenuOpen)}>
-                  <i className="bi bi-person-circle me-1" aria-hidden="true"></i>
-                  {user.login} <span className="dropdown-caret" aria-hidden="true">▾</span>
-                </button>
-                {accountMenuOpen && (
-                  <div className="account-menu">
-                    <button onClick={() => navigate("/moje-konto")}>Moje konto</button>
-                    <button onClick={logout}>Wyloguj</button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <span className="small">Niezalogowany</span>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      <main className="container py-4">
-        {message && <div className="alert alert-info py-2">{message}</div>}
-
-        {!validPath && <NotFound navigate={navigate} />}
-        {path === "/" && <HomePage navigate={navigate} />}
-        {path === "/logowanie" && (
-          <div className="row justify-content-center">
-            <div className="col-lg-5">
+              <button className={`btn btn-sm ${path === "/naprawy" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/naprawy")}>
+                Naprawy rowerowe
+              </button>
+              {!user && (
+                  <button className={`btn btn-sm ${path === "/logowanie" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/logowanie")}>
+                    <i className="bi bi-person-circle me-1"></i> Logowanie
+                  </button>
+              )}
               {user ? (
-                <section className="p-4 bg-white border rounded">
-                  <h1 className="h4 mb-3">Jesteś zalogowany</h1>
-                  <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>Przejdź do mojego konta</button>
-                </section>
+                  <div className="position-relative">
+                    <button className="btn btn-outline-light btn-sm" onClick={() => setAccountMenuOpen(!accountMenuOpen)}>
+                      <i className="bi bi-person-circle me-1"></i> {user.login} <span className="dropdown-caret">▾</span>
+                    </button>
+                    {accountMenuOpen && (
+                        <div className="account-menu">
+                          <button onClick={() => navigate("/moje-konto")}>Moje konto</button>
+                          <button onClick={logout}>Wyloguj</button>
+                        </div>
+                    )}
+                  </div>
               ) : (
-                <AuthPanel
-                  authMode={authMode}
-                  setAuthMode={setAuthMode}
-                  authForm={authForm}
-                  setAuthForm={setAuthForm}
-                  submitAuth={submitAuth}
-                />
+                  <span className="small">Niezalogowany</span>
               )}
             </div>
           </div>
-        )}
-        {path === "/moje-konto" && (
-          user ? (
-            <AccountPage
-              user={user}
-              repairs={repairs}
-              changeStatus={changeStatus}
-              clearHistory={clearHistory}
-            />
-          ) : (
-            <section className="p-4 bg-white border rounded">
-              <h1 className="h4 mb-3">Moje konto</h1>
-              <p className="text-secondary">Zaloguj się, żeby zobaczyć dane konta i historię napraw.</p>
-              <button className="btn btn-primary" onClick={() => navigate("/logowanie")}>Logowanie</button>
-            </section>
-          )
-        )}
-        {path === "/naprawy" && (
-          <>
-        <section className="row g-4 mb-4">
-          <div className="col-12">
-            <div className="p-4 bg-white border rounded h-100">
-              <h1 className="h3 mb-3">Rezerwacja napraw rowerów</h1>
-              <p className="mb-0 text-secondary">
-                Tutaj możesz sprawdzić możliwe terminy naprawy swojego roweru, kalendarz terminów pokazuje dni, w których rower można oddać do naprawy, a czas pracy zależy od liczby zgłoszeń i jest szacowany na podstawie deklarowanej naprawy.
-              </p>
+        </nav>
+
+        <main className="container py-4">
+          {message && (
+              <div className={`alert ${message.startsWith("Błąd") ? "alert-danger" : "alert-success"} py-2`}>
+                {message}
+              </div>
+          )}
+
+          {!validPath && <NotFound navigate={navigate} />}
+          {path === "/" && <HomePage navigate={navigate} />}
+
+          {path === "/zakupy" && (
+              <ProductCatalogPage
+                  products={products}
+                  categories={categories}
+                  filters={productFilters}
+                  setFilters={setProductFilters}
+                  loading={productsLoading}
+                  navigate={navigate}
+                  user={user}
+                  onAddProduct={handleAddProduct}
+                  onDeleteProduct={handleIdDeleteProduct}
+              />
+          )}
+
+          {isProductDetailsPath && (
+              <ProductDetailsPage
+                  product={selectedProduct}
+                  user={user}
+                  onChangeStock={changeProductStock}
+                  navigate={navigate}
+              />
+          )}
+
+          {path === "/platnosc" && (
+              <PaymentGatePage
+                  pendingPayment={pendingPayment}
+                  loading={paymentLoading}
+                  onPay={executePaymentAndBooking}
+                  onCancel={() => { setPendingPayment(null); navigate("/naprawy"); }}
+              />
+          )}
+
+          {path === "/logowanie" && (
+              <div className="row justify-content-center">
+                <div className="col-lg-5">
+                  {user ? (
+                      <section className="p-4 bg-white border rounded">
+                        <h1 className="h4 mb-3">Jesteś zalogowany</h1>
+                        <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>Przejdź do mojego konta</button>
+                      </section>
+                  ) : (
+                      <AuthPanel authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} submitAuth={submitAuth} />
+                  )}
+                </div>
+              </div>
+          )}
+
+          {path === "/moje-konto" && (
+              user ? (
+                  <AccountPage user={user} repairs={repairs} changeStatus={changeStatus} clearHistory={clearHistory} />
+              ) : (
+                  <section className="p-4 bg-white border rounded">
+                    <h1 className="h4 mb-3">Moje konto</h1>
+                    <button className="btn btn-primary" onClick={() => navigate("/logowanie")}>Logowanie</button>
+                  </section>
+              )
+          )}
+
+          {path === "/naprawy" && (
+              <>
+                <section className="row g-4 mb-4">
+                  <div className="col-12">
+                    <div className="p-4 bg-white border rounded">
+                      <h1 className="h3 mb-2">Rezerwacja napraw rowerów</h1>
+                      <p className="mb-0 text-secondary">Zgłoś usterkę, wybierz wolny termin z kalendarza i przejdź do bezpiecznej płatności online.</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="row g-4 mb-4">
+                  <div className="col-lg-7">
+                    <RepairCalendar calendar={calendar} selectedDate={repairForm.dropOffDate} setSelectedDate={(date) => setRepairForm({ ...repairForm, dropOffDate: date })} user={user} />
+                  </div>
+                  <div className="col-lg-5">
+                    <RepairBooking user={user} services={services} repairForm={repairForm} setRepairForm={setRepairForm} estimate={estimate} submitRepair={handleGoToPayment} />
+                  </div>
+                </section>
+              </>
+          )}
+        </main>
+
+        <footer className="border-top bg-white py-3">
+          <div className="container small text-secondary">© 2026 VeloShop</div>
+        </footer>
+      </div>
+  );
+}
+
+function PaymentGatePage({ pendingPayment, loading, onPay, onCancel }) {
+  if (!pendingPayment) {
+    return (
+        <div className="p-4 bg-white border rounded text-center">
+          <p className="text-secondary">Brak aktywnej sesji płatności.</p>
+          <button className="btn btn-dark btn-sm" onClick={onCancel}>Wróć do serwisu</button>
+        </div>
+    );
+  }
+
+  return (
+      <div className="row justify-content-center">
+        <div className="col-md-6">
+          <div className="card shadow-sm border rounded-3 overflow-hidden">
+            <div className="bg-primary text-white p-4 text-center">
+              <h2 className="h4 mb-1">VPay Secure</h2>
+              <small className="opacity-75">Bezpieczna autoryzacja transakcji</small>
+            </div>
+            <div className="card-body p-4 bg-white">
+              <h3 className="h6 text-uppercase text-muted mb-3">Podsumowanie zamówienia</h3>
+              <div className="d-flex justify-content-between border-bottom pb-2 mb-3">
+                <span>{pendingPayment.serviceName} ({pendingPayment.form.bikeDescription})</span>
+                <span className="fw-semibold">{pendingPayment.price.toFixed(2)} zł</span>
+              </div>
+
+              <div className="bg-light p-3 rounded mb-4 text-center">
+                <span className="small text-secondary d-block">Do zapłaty:</span>
+                <span className="fs-2 fw-bold text-dark">{pendingPayment.price.toFixed(2)} PLN</span>
+              </div>
+
+              <div className="d-flex flex-column gap-2">
+                <button
+                    className="btn btn-success btn-lg d-flex align-items-center justify-content-center gap-2"
+                    onClick={onPay}
+                    disabled={loading}
+                >
+                  {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Przetwarzanie...
+                      </>
+                  ) : (
+                      <>
+                        Autoryzuj i Zapłać
+                      </>
+                  )}
+                </button>
+                <button
+                    className="btn btn-link text-danger btn-sm text-decoration-none"
+                    onClick={onCancel}
+                    disabled={loading}
+                >
+                  Anuluj transakcję
+                </button>
+              </div>
             </div>
           </div>
-        </section>
-
-        <section className="row g-4 mb-4">
-          <div className="col-lg-7">
-            <RepairCalendar
-              calendar={calendar}
-              selectedDate={repairForm.dropOffDate}
-              setSelectedDate={(date) => setRepairForm({ ...repairForm, dropOffDate: date })}
-              user={user}
-            />
-          </div>
-          <div className="col-lg-5">
-            <RepairBooking
-              user={user}
-              services={services}
-              repairForm={repairForm}
-              setRepairForm={setRepairForm}
-              estimate={estimate}
-              submitRepair={submitRepair}
-            />
-          </div>
-        </section>
-
-          </>
-        )}
-      </main>
-
-      <footer className="border-top bg-white py-3">
-        <div className="container small text-secondary">
-          TODO: Dodać footer content
         </div>
-      </footer>
-    </div>
+      </div>
+  );
+}
+
+function ProductCatalogPage({ products, categories, filters, setFilters, loading, navigate, user, onAddProduct, onDeleteProduct }) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: "", description: "", price: "", imageUrl: "", category: "", stock: "0"
+  });
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    onAddProduct(newProduct);
+    setNewProduct({ name: "", description: "", price: "", imageUrl: "", category: "", stock: "0" });
+    setShowAddForm(false);
+  }
+
+  return (
+      <section className="p-4 bg-white border rounded">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h1 className="h3 mb-0">Katalog Produktów</h1>
+
+          {user?.role === "admin" && (
+              <button
+                  className={`btn btn-sm ${showAddForm ? 'btn-secondary' : 'btn-danger'}`}
+                  onClick={() => setShowAddForm(!showAddForm)}
+              >
+                {showAddForm ? "Anuluj" : <><i className="bi bi-plus-circle me-1"></i> Dodaj nowy produkt</>}
+              </button>
+          )}
+        </div>
+
+        {user?.role === "admin" && showAddForm && (
+            <form onSubmit={handleSubmit} className="p-3 bg-light border rounded mb-4 row g-2">
+              <h5 className="h6 text-danger fw-bold mb-2 col-12">Nowy produkt</h5>
+              <div className="col-md-4">
+                <input type="text" className="form-control form-control-sm" placeholder="Nazwa produktu" required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
+              </div>
+              <div className="col-md-4">
+                <input type="text" className="form-control form-control-sm" placeholder="Kategoria (np. Rowery, Akcesoria)" required value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} />
+              </div>
+              <div className="col-md-2">
+                <input type="number" step="0.01" className="form-control form-control-sm" placeholder="Cena (PLN)" required value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
+              </div>
+              <div className="col-md-2">
+                <input type="number" className="form-control form-control-sm" placeholder="Ilość na stanie" value={newProduct.stock} onChange={e => setNewProduct({...newProduct, stock: e.target.value})} />
+              </div>
+              <div className="col-md-8">
+                <input type="text" className="form-control form-control-sm" placeholder="URL do zdjęcia (opcjonalnie)" value={newProduct.imageUrl} onChange={e => setNewProduct({...newProduct, imageUrl: e.target.value})} />
+              </div>
+              <div className="col-md-4">
+                <button type="submit" className="btn btn-success btn-sm w-100">Zapisz produkt w sklepie</button>
+              </div>
+              <div className="col-12">
+                <textarea className="form-control form-control-sm" rows="1" placeholder="Opis produktu" value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})}></textarea>
+              </div>
+            </form>
+        )}
+
+        <div className="row g-3 mb-4">
+          <div className="col-md-6">
+            <input type="text" className="form-control" placeholder="Szukaj produktu..." value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
+          </div>
+          <div className="col-md-6">
+            <select className="form-select" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}>
+              <option value="">Wszystkie kategorie</option>
+              {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {loading ? <div className="text-center py-4">Ładowanie...</div> : (
+            <div className="row g-4">
+              {products.map(product => (
+                  <div className="col-sm-6 col-md-4 col-lg-3" key={product.id}>
+                    <div className="card h-100 border text-center">
+                      <img src={product.imageUrl} className="card-img-top" alt={product.name} style={{ height: "140px", objectFit: "cover" }} />
+                      <div className="card-body d-flex flex-column">
+                        <h5 className="card-title h6 text-truncate">{product.name}</h5>
+                        <p className="card-text fw-bold text-primary mb-1">{product.price.toFixed(2)} PLN</p>
+                        <p className="mb-2 text-muted" style={{ fontSize: '12px' }}>Dostępność: {product.stock > 0 ? `${product.stock} szt.` : 'Brak na stanie'}</p>
+
+                        <div className="d-flex gap-1 mt-auto justify-content-center">
+                          <button className="btn btn-sm btn-outline-dark flex-grow-1" onClick={() => navigate(`/produkt/${product.id}`)}>Szczegóły</button>
+
+                          {user?.role === "admin" && (
+                              <button
+                                  className="btn btn-sm btn-outline-danger"
+                                  title="Usuń produkt"
+                                  onClick={() => onDeleteProduct(product.id)}
+                              >
+                                <i className="bi bi-trash"></i>
+                              </button>
+                          )}
+                        </div>
+
+                      </div>
+                    </div>
+                  </div>
+              ))}
+            </div>
+        )}
+      </section>
+  );
+}
+
+function ProductDetailsPage({ product, user, onChangeStock, navigate }) {
+  if (!product) return <div className="p-4 text-center">Ładowanie...</div>;
+
+  const [inputStock, setInputStock] = useState(product.stock);
+
+  useEffect(() => {
+    setInputStock(product.stock);
+  }, [product.stock]);
+
+  function handleStockSubmit(e) {
+    e.preventDefault();
+    onChangeStock(product.id, inputStock);
+  }
+
+  return (
+      <section className="p-4 bg-white border rounded">
+        <button className="btn btn-link p-0 mb-3 text-decoration-none" onClick={() => navigate("/zakupy")}>← Powrót</button>
+        <div className="row g-4">
+          <div className="col-md-5">
+            <img src={product.imageUrl} alt={product.name} className="img-fluid rounded border" />
+          </div>
+          <div className="col-md-7">
+            <h1 className="h3">{product.name}</h1>
+            <h2 className="h4 text-danger fw-bold">{product.price.toFixed(2)} PLN</h2>
+
+            <div className="mt-2 mb-3">
+              <span className="badge bg-light text-dark border p-2">
+                Dostępność: {product.stock > 0 ? (
+                  <span className="text-success fw-bold">{product.stock} szt.</span>
+              ) : (
+                  <span className="text-danger fw-bold">Brak na stanie</span>
+              )}
+              </span>
+            </div>
+
+            <p className="mt-3 text-secondary">{product.description}</p>
+
+            <div className="d-flex flex-column gap-3 mt-4" style={{ maxWidth: "300px" }}>
+              <button
+                  className="btn btn-primary"
+                  disabled={product.stock <= 0}
+              >
+                {product.stock > 0 ? "Dodaj do koszyka" : "Produkt niedostępny"}
+              </button>
+
+              {user?.role === "admin" && (
+                  <div className="p-3 bg-light border rounded mt-3">
+                    <h3 className="h6 text-danger fw-bold mb-2"><i className="bi bi-gear-fill me-1"></i> Panel Administratora</h3>
+                    <form onSubmit={handleStockSubmit} className="d-flex gap-2">
+                      <div className="flex-grow-1">
+                        <label className="form-label small text-muted mb-1">Zmień ilość na stanie:</label>
+                        <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            min="0"
+                            value={inputStock}
+                            onChange={(e) => setInputStock(e.target.value)}
+                        />
+                      </div>
+                      <button type="submit" className="btn btn-danger btn-sm align-self-end">
+                        Zapisz
+                      </button>
+                    </form>
+                  </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      </section>
   );
 }
 
 function HomePage({ navigate }) {
   return (
-    <section className="p-4 bg-white border rounded">
-      <h1 className="h3 mb-3">VeloShop</h1>
-      <p className="text-secondary mb-4">
-        TODO: Dodać homepage content
-      </p>
-      <button className="btn btn-primary" onClick={() => navigate("/naprawy")}>Przejdź do napraw rowerowych</button>
-    </section>
+      <section className="p-4 bg-white border rounded text-center">
+        <h1 className="h2 mb-3">VeloShop</h1>
+        <p className="text-secondary mb-4">Witaj w systemie obsługi salonu rowerowego.</p>
+        <div className="d-flex justify-content-center gap-2">
+          <button className="btn btn-primary" onClick={() => navigate("/zakupy")}>Zakupy</button>
+          <button className="btn btn-outline-dark" onClick={() => navigate("/naprawy")}>Serwis napraw</button>
+        </div>
+      </section>
   );
 }
 
 function NotFound({ navigate }) {
-  return (
-    <section className="p-4 bg-white border rounded text-center">
-      <h1 className="h3 mb-3">404</h1>
-      <p className="text-secondary">Nie znaleziono strony.</p>
-      <button className="btn btn-primary" onClick={() => navigate("/")}>Powrót do strony głównej</button>
-    </section>
-  );
+  return <section className="p-4 bg-white border rounded text-center"><h3>404</h3><button className="btn btn-primary" onClick={() => navigate("/")}>Główna</button></section>;
 }
 
 function AuthPanel({ authMode, setAuthMode, authForm, setAuthForm, submitAuth }) {
   return (
-    <div className="p-4 bg-white border rounded h-100">
-      <div className="d-flex gap-2 mb-3">
-        <button className={`btn btn-sm ${authMode === "login" ? "btn-dark" : "btn-outline-dark"}`} onClick={() => setAuthMode("login")}>Logowanie</button>
-        <button className={`btn btn-sm ${authMode === "register" ? "btn-dark" : "btn-outline-dark"}`} onClick={() => setAuthMode("register")}>Rejestracja</button>
+      <div className="p-4 bg-white border rounded">
+        <div className="d-flex gap-2 mb-3">
+          <button className={`btn btn-sm ${authMode === "login" ? "btn-dark" : "btn-outline-dark"}`} onClick={() => setAuthMode("login")}>Logowanie</button>
+          <button className={`btn btn-sm ${authMode === "register" ? "btn-dark" : "btn-outline-dark"}`} onClick={() => setAuthMode("register")}>Rejestracja</button>
+        </div>
+        <form onSubmit={submitAuth}>
+          {authMode === "register" && (
+              <div className="row g-2 mb-2">
+                <div className="col"><input className="form-control" placeholder="Imię" value={authForm.firstName} onChange={(e) => setAuthForm({ ...authForm, firstName: e.target.value })} /></div>
+                <div className="col"><input className="form-control" placeholder="Nazwisko" value={authForm.lastName} onChange={(e) => setAuthForm({ ...authForm, lastName: e.target.value })} /></div>
+              </div>
+          )}
+          <input className="form-control mb-2" placeholder="Email / Login" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} />
+          <input className="form-control mb-3" type="password" placeholder="Hasło" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} />
+          <button className="btn btn-primary w-100">{authMode === "login" ? "Zaloguj" : "Zarejestruj"}</button>
+        </form>
       </div>
-      <form onSubmit={submitAuth}>
-        {authMode === "register" && (
-          <div className="row g-2 mb-2">
-            <div className="col">
-              <input className="form-control" placeholder="Imię" value={authForm.firstName} onChange={(event) => setAuthForm({ ...authForm, firstName: event.target.value })} />
-            </div>
-            <div className="col">
-              <input className="form-control" placeholder="Nazwisko" value={authForm.lastName} onChange={(event) => setAuthForm({ ...authForm, lastName: event.target.value })} />
-            </div>
-          </div>
-        )}
-        <input className="form-control mb-2" placeholder={authMode === "login" ? "Login albo email" : "Email"} value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} />
-        <input className="form-control mb-3" type="password" placeholder="Hasło" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} />
-        <button className="btn btn-primary w-100">{authMode === "login" ? "Zaloguj" : "Utwórz konto"}</button>
-        <div className="small text-secondary mt-3">Demo: user/user, admin/admin</div>
-      </form>
-    </div>
   );
 }
 
 function AccountPage({ user, repairs, changeStatus, clearHistory }) {
   return (
-    <div className="row g-4">
-      <div className="col-lg-4">
-        <section className="p-4 bg-white border rounded h-100">
-          <h1 className="h4 mb-3">Moje konto</h1>
-          <dl className="mb-0">
-            <dt>Imię i nazwisko</dt>
-            <dd>{user.firstName} {user.lastName}</dd>
-            <dt>Email</dt>
-            <dd>{user.email}</dd>
-            <dt>Login</dt>
-            <dd>{user.login}</dd>
-            <dt>Typ konta</dt>
-            <dd>{user.role === "admin" ? "Właściciel" : "Klient"}</dd>
-          </dl>
-        </section>
+      <div className="row g-4">
+        <div className="col-lg-4">
+          <section className="p-4 bg-white border rounded">
+            <h1 className="h4 mb-3">Konto</h1>
+            <p className="mb-1"><strong>Zalogowany jako:</strong> {user.firstName} {user.lastName}</p>
+            <p className="text-muted small">{user.email}</p>
+          </section>
+        </div>
+        <div className="col-lg-8">
+          <RepairHistory user={user} repairs={repairs} changeStatus={changeStatus} clearHistory={clearHistory} />
+        </div>
       </div>
-      <div className="col-lg-8">
-        <RepairHistory
-          user={user}
-          repairs={repairs}
-          changeStatus={changeStatus}
-          clearHistory={clearHistory}
-        />
-      </div>
-    </div>
   );
 }
 
@@ -478,70 +832,47 @@ function RepairCalendar({ calendar, selectedDate, setSelectedDate, user }) {
 
 function RepairBooking({ user, services, repairForm, setRepairForm, estimate, submitRepair }) {
   return (
-    <div className="p-4 bg-white border rounded h-100">
-      <h2 className="h5 mb-3">Zlecenie naprawy</h2>
-      {!user && <div className="alert alert-warning py-2">Zaloguj się, żeby złożyć zlecenie.</div>}
-      <form onSubmit={submitRepair}>
-        <select className="form-select mb-2" value={repairForm.repairServiceId} onChange={(event) => setRepairForm({ ...repairForm, repairServiceId: event.target.value })}>
-          <option value="">Wybierz rodzaj naprawy</option>
-          {services.map((service) => (
-            <option key={service.id} value={service.id}>
-              {service.name} - {service.durationHours}h - {service.price} zł
-            </option>
-          ))}
-        </select>
-        <div className="form-control mb-2 bg-light">Dzień oddania: {repairForm.dropOffDate}</div>
-        <input className="form-control mb-2" placeholder="Opis roweru" value={repairForm.bikeDescription} onChange={(event) => setRepairForm({ ...repairForm, bikeDescription: event.target.value })} />
-        <textarea className="form-control mb-3" rows="3" placeholder="Opis usterki" value={repairForm.issueDescription} onChange={(event) => setRepairForm({ ...repairForm, issueDescription: event.target.value })} />
-        {estimate && (
-          <div className="alert alert-light border py-2">
-            <div>Oddanie: {repairForm.dropOffDate}</div>
-            <div>Szacowany odbiór: {estimate.readyDate}</div>
-            <div>Czas pracy: {estimate.durationHours}h</div>
-          </div>
-        )}
-        <button className="btn btn-primary w-100" disabled={!user}>Złóż zlecenie</button>
-      </form>
-    </div>
+      <div className="p-4 bg-white border rounded">
+        <h2 className="h5 mb-3">Zlecenie naprawy</h2>
+        {!user && <div className="alert alert-warning py-1 small">Zaloguj się, by złożyć zlecenie.</div>}
+        <form onSubmit={submitRepair}>
+          <select className="form-select mb-2" value={repairForm.repairServiceId} onChange={(e) => setRepairForm({ ...repairForm, repairServiceId: e.target.value })}>
+            <option value="">Wybierz naprawę</option>
+            {services.map(s => <option key={s.id} value={s.id}>{s.name} - {s.price} zł</option>)}
+          </select>
+          <input className="form-control mb-2" placeholder="Opis roweru" value={repairForm.bikeDescription} onChange={(e) => setRepairForm({ ...repairForm, bikeDescription: e.target.value })} />
+          <textarea className="form-control mb-3" rows="2" placeholder="Opis usterki" value={repairForm.issueDescription} onChange={(e) => setRepairForm({ ...repairForm, issueDescription: e.target.value })} />
+          {estimate && <div className="alert alert-light border small py-2 mb-3">Odbiór szacowany: {estimate.readyDate}</div>}
+          <button className="btn btn-primary w-100" disabled={!user}>Przejdź do płatności</button>
+        </form>
+      </div>
   );
 }
 
 function RepairHistory({ user, repairs, changeStatus, clearHistory }) {
   return (
-    <section className="p-4 bg-white border rounded">
-      <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
-        <h2 className="h5 mb-0">{user?.role === "admin" ? "Panel napraw" : "Historia moich napraw"}</h2>
-        {user?.role === "admin" && (
-          <button className="btn btn-outline-danger btn-sm" onClick={clearHistory}>Wyczyść historię napraw</button>
-        )}
-      </div>
-      {!user && <p className="text-secondary mb-0">Historia jest dostępna po zalogowaniu.</p>}
-      {user && repairs.length === 0 && <p className="text-secondary mb-0">Brak zleceń.</p>}
-      <div className="row g-3">
-        {repairs.map((repair) => (
-          <div className="col-lg-6" key={repair.id}>
-            <div className="border rounded p-3 h-100">
-              <div className="d-flex justify-content-between gap-2 mb-2">
-                <strong>{repair.bikeDescription}</strong>
-                <span className="badge text-bg-secondary">{statusLabel(repair.status)}</span>
-              </div>
-              <div className="small text-secondary">{repair.RepairService?.name} | {repair.plannedHours}h</div>
-              <div className="small text-secondary">Oddanie: {repair.dropOffDate} | Odbiór: {repair.readyDate}</div>
-              <p className="small mt-2 mb-3">{repair.issueDescription}</p>
-              {user?.role === "admin" && !["completed", "cancelled"].includes(repair.status) && (
-                <div className="d-flex gap-2">
-                  {finalStatuses.map((status) => (
-                    <button className="btn btn-sm btn-outline-primary" key={status.value} onClick={() => changeStatus(repair, status.value)}>
-                      {status.label}
-                    </button>
-                  ))}
+      <section className="p-4 bg-white border rounded">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h2 className="h5 mb-0">Historia napraw</h2>
+          {user?.role === "admin" && <button className="btn btn-outline-danger btn-sm" onClick={clearHistory}>Wyczyść</button>}
+        </div>
+        <div className="row g-2">
+          {repairs.map(r => (
+              <div className="col-12 border rounded p-3" key={r.id}>
+                <div className="d-flex justify-content-between">
+                  <strong>{r.bikeDescription}</strong>
+                  <span className="badge bg-secondary">{statusLabel(r.status)}</span>
                 </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+                <small className="text-muted d-block">Termin: {r.dropOffDate} do {r.readyDate}</small>
+                {user?.role === "admin" && !["completed", "cancelled"].includes(r.status) && (
+                    <div className="d-flex gap-2 mt-2">
+                      {finalStatuses.map(s => <button key={s.value} className="btn btn-sm btn-outline-primary" onClick={() => changeStatus(r, s.value)}>{s.label}</button>)}
+                    </div>
+                )}
+              </div>
+          ))}
+        </div>
+      </section>
   );
 }
 
