@@ -166,7 +166,7 @@ export default function App() {
       const data = await request(`${PRODUCT_API}/products`);
       const featured = (data || [])
         .filter((product) => product.stock > 0)
-        .slice(0, 4);
+        .slice(0, 5);
       setFeaturedProducts(featured);
     } catch (err) {
       console.error(err);

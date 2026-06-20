@@ -26,7 +26,7 @@ export function RecommendedProducts({ products, loading, navigate, onAddToCart }
             <article className="recommended-card" key={product.id}>
               <div className="recommended-card-image">
                 <span className="recommended-badge">POLECAMY</span>
-                <img src={product.imageUrl} alt={product.name} />
+                <img src={product.imageUrl} alt={product.name} loading="lazy" />
               </div>
               <div className="recommended-card-body">
                 <span className="recommended-category">{product.category}</span>
