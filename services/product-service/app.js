@@ -192,7 +192,7 @@ app.post("/products", async (req, res) => {
             name,
             description: description || "",
             price: Number(price),
-            imageUrl: imageUrl || "https://images.unsplash.com/vector-1765806167507-64b5553cc6d7?q=80&w=880",
+            imageUrl: imageUrl || "https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=500",
             category,
             stock: stock !== undefined ? Number(stock) : 0
         });
