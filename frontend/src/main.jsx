@@ -153,6 +153,12 @@ function App() {
   }, [path, productFilters]);
 
   useEffect(() => {
+    if (path === "/koszyk" && cart.length > 0) {
+      syncCartStock();
+    }
+  }, [path]);
+
+  useEffect(() => {
     if (path.startsWith("/produkt/")) {
       const productId = path.split("/")[2];
       if (productId) loadSingleProduct(productId);
@@ -316,7 +322,7 @@ function App() {
       if (existing) {
         const nextQuantity = Math.min(existing.quantity + quantity, product.stock);
         return prev.map((item) => item.productId === product.id
-          ? { ...item, quantity: nextQuantity }
+          ? { ...item, stock: product.stock, price: product.price, quantity: nextQuantity }
           : item);
       }
 
@@ -334,6 +340,52 @@ function App() {
 
   function removeFromCart(productId) {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
+  }
+
+  function clearCart() {
+    if (!window.confirm("Czy na pewno chcesz wyczyścić koszyk?")) {
+      return;
+    }
+
+    setCart([]);
+    setMessage("Koszyk został wyczyszczony.");
+  }
+
+  async function syncCartStock() {
+    if (cart.length === 0) {
+      return;
+    }
+
+    try {
+      const products = await Promise.all(
+        cart.map((item) => request(`${PRODUCT_API}/products/${item.productId}`).catch(() => null))
+      );
+
+      const next = cart.flatMap((item, index) => {
+        const product = products[index];
+
+        if (!product || product.stock <= 0) {
+          return [];
+        }
+
+        return [{
+          ...item,
+          name: product.name,
+          price: product.price,
+          imageUrl: product.imageUrl,
+          stock: product.stock,
+          quantity: Math.min(item.quantity, product.stock)
+        }];
+      });
+
+      if (next.length < cart.length) {
+        setMessage("Usunięto z koszyka produkty, których już nie ma na stanie.");
+      }
+
+      setCart(next);
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   function updateCartQuantity(productId, quantity) {
@@ -387,7 +439,9 @@ function App() {
         setMessage("Zamówienie opłacone i złożone pomyślnie!");
         navigate(`/zamowienie/${order.id}`);
       } else {
+        setOrders([order, ...orders]);
         setMessage(`Błąd płatności: ${order.paymentMessage || "Płatność nieudana."}`);
+        navigate(`/zamowienie/${order.id}`);
       }
 
       if (path === "/zakupy") {
@@ -412,6 +466,31 @@ function App() {
       setSelectedOrder(updated);
     }
     setMessage(`Status zamówienia #${updated.id} zmieniony na: ${orderStatusLabel(updated.status)}.`);
+  }
+
+  async function retryOrderPayment(order) {
+    setOrderLoading(true);
+
+    try {
+      const updated = await request(`${ORDER_API}/orders/${order.id}/retry-payment`, {
+        method: "POST",
+        headers
+      });
+
+      setOrders(orders.map((item) => item.id === updated.id ? updated : item));
+      setSelectedOrder(updated);
+
+      if (updated.status === "paid") {
+        setCart([]);
+        setMessage("Płatność zrealizowana pomyślnie!");
+      } else {
+        setMessage(`Błąd płatności: ${updated.paymentMessage || "Płatność nieudana."}`);
+      }
+    } catch (error) {
+      setMessage(`Błąd: ${error.message}`);
+    } finally {
+      setOrderLoading(false);
+    }
   }
 
   function handleGoToPayment(event) {
@@ -654,10 +733,11 @@ function App() {
               user ? (
                   <OrderDetailsPage
                       order={selectedOrder}
-                      loading={orderDetailsLoading}
+                      loading={orderDetailsLoading || orderLoading}
                       user={user}
                       navigate={navigate}
                       changeOrderStatus={changeOrderStatus}
+                      onRetryPayment={retryOrderPayment}
                   />
               ) : (
                   <section className="p-4 bg-white border rounded text-center">
@@ -677,6 +757,7 @@ function App() {
                   setCheckoutForm={setCheckoutForm}
                   onRemove={removeFromCart}
                   onUpdateQuantity={updateCartQuantity}
+                  onClearCart={clearCart}
                   onSubmitOrder={submitOrder}
                   loading={orderLoading}
                   navigate={navigate}
@@ -934,14 +1015,20 @@ function ProductDetailsPage({ product, user, onChangeStock, onAddToCart, navigat
   if (!product) return <div className="p-4 text-center">Ładowanie...</div>;
 
   const [inputStock, setInputStock] = useState(product.stock);
+  const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     setInputStock(product.stock);
-  }, [product.stock]);
+    setQuantity(1);
+  }, [product.id, product.stock]);
 
   function handleStockSubmit(e) {
     e.preventDefault();
     onChangeStock(product.id, inputStock);
+  }
+
+  function handleAddToCart() {
+    onAddToCart(product, Number(quantity));
   }
 
   return (
@@ -968,10 +1055,23 @@ function ProductDetailsPage({ product, user, onChangeStock, onAddToCart, navigat
             <p className="mt-3 text-secondary">{product.description}</p>
 
             <div className="d-flex flex-column gap-3 mt-4" style={{ maxWidth: "300px" }}>
+              {product.stock > 0 && (
+                <div>
+                  <label className="form-label small text-muted mb-1">Ilość</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min="1"
+                    max={product.stock}
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                  />
+                </div>
+              )}
               <button
                   className="btn btn-primary"
                   disabled={product.stock <= 0}
-                  onClick={() => onAddToCart(product)}
+                  onClick={handleAddToCart}
               >
                 {product.stock > 0 ? "Dodaj do koszyka" : "Produkt niedostępny"}
               </button>
@@ -1064,7 +1164,7 @@ function AccountPage({ user, repairs, orders, changeStatus, changeOrderStatus, c
   );
 }
 
-function CartPage({ cart, cartTotal, user, checkoutForm, setCheckoutForm, onRemove, onUpdateQuantity, onSubmitOrder, loading, navigate }) {
+function CartPage({ cart, cartTotal, user, checkoutForm, setCheckoutForm, onRemove, onUpdateQuantity, onClearCart, onSubmitOrder, loading, navigate }) {
   if (cart.length === 0) {
     return (
       <section className="p-4 bg-white border rounded text-center">
@@ -1077,7 +1177,12 @@ function CartPage({ cart, cartTotal, user, checkoutForm, setCheckoutForm, onRemo
 
   return (
     <section className="p-4 bg-white border rounded">
-      <h1 className="h3 mb-4">Koszyk</h1>
+      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <h1 className="h3 mb-0">Koszyk</h1>
+        <button type="button" className="btn btn-sm btn-outline-danger" onClick={onClearCart}>
+          Wyczyść koszyk
+        </button>
+      </div>
       <div className="row g-4">
         <div className="col-lg-7">
           <div className="d-flex flex-column gap-3">
@@ -1087,6 +1192,10 @@ function CartPage({ cart, cartTotal, user, checkoutForm, setCheckoutForm, onRemo
                 <div className="flex-grow-1">
                   <strong className="d-block">{item.name}</strong>
                   <span className="text-muted small">{item.price.toFixed(2)} PLN / szt.</span>
+                  <span className="text-muted small d-block">Dostępne: {item.stock} szt.</span>
+                  {item.quantity >= item.stock && (
+                    <span className="text-warning small">Osiągnięto limit stanu magazynowego</span>
+                  )}
                 </div>
                 <input
                   type="number"
@@ -1160,7 +1269,7 @@ function CartPage({ cart, cartTotal, user, checkoutForm, setCheckoutForm, onRemo
   );
 }
 
-function OrderDetailsPage({ order, loading, user, navigate, changeOrderStatus }) {
+function OrderDetailsPage({ order, loading, user, navigate, changeOrderStatus, onRetryPayment }) {
   if (loading) {
     return <div className="p-4 text-center">Ładowanie zamówienia...</div>;
   }
@@ -1189,6 +1298,30 @@ function OrderDetailsPage({ order, loading, user, navigate, changeOrderStatus })
           {orderStatusLabel(order.status)}
         </span>
       </div>
+
+      {order.status === "failed" && (
+        <div className="alert alert-danger">
+          <strong>Płatność nieudana.</strong>{" "}
+          {order.paymentMessage || "Transakcja została odrzucona."}
+          <div className="d-flex gap-2 flex-wrap mt-3">
+            <button
+              type="button"
+              className="btn btn-sm btn-danger"
+              disabled={loading}
+              onClick={() => onRetryPayment(order)}
+            >
+              {loading ? "Przetwarzanie..." : "Spróbuj opłacić ponownie"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => navigate("/koszyk")}
+            >
+              Wróć do koszyka
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="row g-4">
         <div className="col-lg-7">
