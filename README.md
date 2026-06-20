@@ -72,7 +72,7 @@ TODO:
 
 ### Order Service
 
-Odpowiada za zamówienia.
+Odpowiada za zamówienia (port `4003`).
 
 Zakres:
 
@@ -81,7 +81,15 @@ Zakres:
 - szczegóły zamówienia,
 - pozycje zamówienia,
 - status zamówienia,
-- powiązanie zamówienia z płatnością.
+- rezerwacja produktów w Product Service,
+- powiązanie zamówienia z płatnością w Payment Service.
+
+Endpointy:
+
+- `POST /orders` — złożenie zamówienia (JWT),
+- `GET /orders` — lista zamówień użytkownika lub wszystkich (admin),
+- `GET /orders/:id` — szczegóły zamówienia,
+- `PATCH /orders/:id/status` — zmiana statusu (admin).
 
 ### Payment Service
 
@@ -108,8 +116,52 @@ Zakres:
 
 ## Uruchomienie
 
+### Szybki start (Windows)
+
+Aby uruchomić wszystkie serwisy i frontend jednym skryptem:
+
+```
+start.bat
+```
+
+Albo z terminala:
+
+```
+.\scripts\start-all.ps1
+```
+
+Wymuszenie `npm install` we wszystkich serwisach:
+
+```
+.\scripts\start-all.ps1 -Install
+```
+
+Skrypt otwiera osobne okna terminala dla każdego serwisu, uruchamia frontend i otwiera aplikację w przeglądarce pod adresem `http://localhost:5173`. Jeśli dany port jest już zajęty, skrypt pomija ten serwis zamiast zgłaszać błąd.
+
+### Ręczne uruchomienie
+
+Każdy serwis uruchamia się w osobnym terminalu.
+
 ```
 cd services/user-service
+npm install
+npm start
+```
+
+```
+cd services/product-service
+npm install
+npm start
+```
+
+```
+cd services/order-service
+npm install
+npm start
+```
+
+```
+cd services/payment-service
 npm install
 npm start
 ```
@@ -125,6 +177,17 @@ cd frontend
 npm install
 npm run dev
 ```
+
+### Porty serwisów
+
+| Serwis | Port |
+|--------|------|
+| User Service | 4001 |
+| Product Service | 3002 |
+| Order Service | 4003 |
+| Repair Service | 4005 |
+| Payment Service | 4006 |
+| Frontend (Vite) | 5173 |
 
 ## Konta testowe
 
