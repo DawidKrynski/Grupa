@@ -70,6 +70,18 @@ function orderStatusLabel(status) {
   return labels[status] || status;
 }
 
+function orderStatusBadgeClass(status) {
+  if (["paid", "shipped", "completed"].includes(status)) return "bg-success";
+  if (status === "failed") return "bg-danger";
+  if (status === "cancelled") return "bg-dark";
+  return "bg-secondary";
+}
+
+function paymentMethodLabel(method) {
+  const labels = { card: "Karta płatnicza", blik: "BLIK" };
+  return labels[method] || method;
+}
+
 function App() {
   const [path, setPath] = useState(window.location.pathname);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -100,6 +112,8 @@ function App() {
 
   const [cart, setCart] = useState(loadCartFromStorage);
   const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orderDetailsLoading, setOrderDetailsLoading] = useState(false);
   const [checkoutForm, setCheckoutForm] = useState({ deliveryAddress: "", paymentMethod: "card" });
   const [orderLoading, setOrderLoading] = useState(false);
 
@@ -144,6 +158,15 @@ function App() {
       if (productId) loadSingleProduct(productId);
     }
   }, [path]);
+
+  useEffect(() => {
+    if (path.startsWith("/zamowienie/")) {
+      const orderId = path.split("/")[2];
+      if (orderId) loadSingleOrder(orderId);
+    } else {
+      setSelectedOrder(null);
+    }
+  }, [path, token]);
 
   async function request(url, options = {}) {
     const response = await fetch(url, options);
@@ -219,6 +242,24 @@ function App() {
       headers: { Authorization: `Bearer ${nextToken}` }
     });
     setOrders(data);
+  }
+
+  async function loadSingleOrder(id) {
+    if (!token) {
+      setSelectedOrder(null);
+      return;
+    }
+
+    setOrderDetailsLoading(true);
+
+    try {
+      const data = await request(`${ORDER_API}/orders/${id}`, { headers });
+      setSelectedOrder(data);
+    } catch {
+      setSelectedOrder(null);
+    } finally {
+      setOrderDetailsLoading(false);
+    }
   }
 
   async function loadRepairs(nextToken = token) {
@@ -344,7 +385,7 @@ function App() {
         setCheckoutForm({ deliveryAddress: "", paymentMethod: "card" });
         setOrders([order, ...orders]);
         setMessage("Zamówienie opłacone i złożone pomyślnie!");
-        navigate("/moje-konto");
+        navigate(`/zamowienie/${order.id}`);
       } else {
         setMessage(`Błąd płatności: ${order.paymentMessage || "Płatność nieudana."}`);
       }
@@ -367,6 +408,9 @@ function App() {
     });
 
     setOrders(orders.map((item) => item.id === updated.id ? updated : item));
+    if (selectedOrder?.id === updated.id) {
+      setSelectedOrder(updated);
+    }
     setMessage(`Status zamówienia #${updated.id} zmieniony na: ${orderStatusLabel(updated.status)}.`);
   }
 
@@ -524,7 +568,8 @@ function App() {
   }, []);
 
   const isProductDetailsPath = path.startsWith("/produkt/");
-  const validPath = path === "/" || path === "/naprawy" || path === "/logowanie" || path === "/moje-konto" || path === "/zakupy" || path === "/koszyk" || path === "/platnosc" || isProductDetailsPath;
+  const isOrderDetailsPath = path.startsWith("/zamowienie/");
+  const validPath = path === "/" || path === "/naprawy" || path === "/logowanie" || path === "/moje-konto" || path === "/zakupy" || path === "/koszyk" || path === "/platnosc" || isProductDetailsPath || isOrderDetailsPath;
 
   return (
       <div className="app-shell">
@@ -605,6 +650,24 @@ function App() {
               />
           )}
 
+          {isOrderDetailsPath && (
+              user ? (
+                  <OrderDetailsPage
+                      order={selectedOrder}
+                      loading={orderDetailsLoading}
+                      user={user}
+                      navigate={navigate}
+                      changeOrderStatus={changeOrderStatus}
+                  />
+              ) : (
+                  <section className="p-4 bg-white border rounded text-center">
+                    <h1 className="h4 mb-3">Szczegóły zamówienia</h1>
+                    <p className="text-secondary mb-3">Zaloguj się, aby zobaczyć zamówienie.</p>
+                    <button className="btn btn-primary" onClick={() => navigate("/logowanie")}>Logowanie</button>
+                  </section>
+              )
+          )}
+
           {path === "/koszyk" && (
               <CartPage
                   cart={cart}
@@ -653,6 +716,7 @@ function App() {
                       changeStatus={changeStatus}
                       changeOrderStatus={changeOrderStatus}
                       clearHistory={clearHistory}
+                      navigate={navigate}
                   />
               ) : (
                   <section className="p-4 bg-white border rounded">
@@ -980,7 +1044,7 @@ function AuthPanel({ authMode, setAuthMode, authForm, setAuthForm, submitAuth })
   );
 }
 
-function AccountPage({ user, repairs, orders, changeStatus, changeOrderStatus, clearHistory }) {
+function AccountPage({ user, repairs, orders, changeStatus, changeOrderStatus, clearHistory, navigate }) {
   return (
       <div className="row g-4">
         <div className="col-lg-4">
@@ -991,7 +1055,7 @@ function AccountPage({ user, repairs, orders, changeStatus, changeOrderStatus, c
           </section>
         </div>
         <div className="col-lg-8">
-          <OrderHistory user={user} orders={orders} changeOrderStatus={changeOrderStatus} />
+          <OrderHistory user={user} orders={orders} changeOrderStatus={changeOrderStatus} navigate={navigate} />
           <div className="mt-4">
             <RepairHistory user={user} repairs={repairs} changeStatus={changeStatus} clearHistory={clearHistory} />
           </div>
@@ -1096,7 +1160,121 @@ function CartPage({ cart, cartTotal, user, checkoutForm, setCheckoutForm, onRemo
   );
 }
 
-function OrderHistory({ user, orders, changeOrderStatus }) {
+function OrderDetailsPage({ order, loading, user, navigate, changeOrderStatus }) {
+  if (loading) {
+    return <div className="p-4 text-center">Ładowanie zamówienia...</div>;
+  }
+
+  if (!order) {
+    return (
+      <section className="p-4 bg-white border rounded text-center">
+        <h1 className="h4 mb-3">Nie znaleziono zamówienia</h1>
+        <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>← Moje konto</button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="p-4 bg-white border rounded">
+      <button className="btn btn-link p-0 mb-3 text-decoration-none" onClick={() => navigate("/moje-konto")}>← Moje konto</button>
+
+      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+        <div>
+          <h1 className="h3 mb-1">Zamówienie #{order.id}</h1>
+          <small className="text-muted">
+            {new Date(order.createdAt).toLocaleString("pl-PL")}
+          </small>
+        </div>
+        <span className={`badge ${orderStatusBadgeClass(order.status)} p-2`}>
+          {orderStatusLabel(order.status)}
+        </span>
+      </div>
+
+      <div className="row g-4">
+        <div className="col-lg-7">
+          <h2 className="h5 mb-3">Pozycje</h2>
+          <div className="table-responsive">
+            <table className="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Produkt</th>
+                  <th className="text-center">Ilość</th>
+                  <th className="text-end">Cena</th>
+                  <th className="text-end">Razem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(order.OrderItems || []).map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.productName}</td>
+                    <td className="text-center">{item.quantity}</td>
+                    <td className="text-end">{item.unitPrice.toFixed(2)} PLN</td>
+                    <td className="text-end">{(item.unitPrice * item.quantity).toFixed(2)} PLN</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="3" className="text-end fw-bold">Suma:</td>
+                  <td className="text-end fw-bold">{order.totalAmount.toFixed(2)} PLN</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div className="col-lg-5">
+          <div className="p-3 bg-light border rounded">
+            <h2 className="h5 mb-3">Dane zamówienia</h2>
+            <dl className="small mb-0">
+              <dt className="text-muted">Adres dostawy</dt>
+              <dd>{order.deliveryAddress}</dd>
+              <dt className="text-muted">Metoda płatności</dt>
+              <dd>{paymentMethodLabel(order.paymentMethod)}</dd>
+              {order.paymentTransactionId && (
+                <>
+                  <dt className="text-muted">ID transakcji</dt>
+                  <dd>{order.paymentTransactionId}</dd>
+                </>
+              )}
+              {order.paymentMessage && (
+                <>
+                  <dt className="text-muted">Płatność</dt>
+                  <dd>{order.paymentMessage}</dd>
+                </>
+              )}
+              {user?.role === "admin" && (
+                <>
+                  <dt className="text-muted">Klient</dt>
+                  <dd>{order.userEmail}</dd>
+                </>
+              )}
+            </dl>
+          </div>
+
+          {user?.role === "admin" && ["paid", "shipped"].includes(order.status) && (
+            <div className="p-3 bg-light border rounded mt-3">
+              <h3 className="h6 fw-bold mb-2">Zmiana statusu</h3>
+              <div className="d-flex gap-2 flex-wrap">
+                {orderAdminStatuses.map((status) => (
+                  <button
+                    key={status.value}
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => changeOrderStatus(order, status.value)}
+                  >
+                    {status.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OrderHistory({ user, orders, changeOrderStatus, navigate }) {
   return (
     <section className="p-4 bg-white border rounded">
       <h2 className="h5 mb-3">Historia zamówień</h2>
@@ -1111,7 +1289,7 @@ function OrderHistory({ user, orders, changeOrderStatus }) {
                   <strong>Zamówienie #{order.id}</strong>
                   <small className="d-block text-muted">{order.deliveryAddress}</small>
                 </div>
-                <span className={`badge ${order.status === "paid" || order.status === "shipped" || order.status === "completed" ? "bg-success" : order.status === "failed" ? "bg-danger" : "bg-secondary"}`}>
+                <span className={`badge ${orderStatusBadgeClass(order.status)}`}>
                   {orderStatusLabel(order.status)}
                 </span>
               </div>
@@ -1124,9 +1302,15 @@ function OrderHistory({ user, orders, changeOrderStatus }) {
               </ul>
               <div className="d-flex justify-content-between align-items-center">
                 <strong>{order.totalAmount.toFixed(2)} PLN</strong>
-                {user?.role === "admin" && ["paid", "shipped"].includes(order.status) && (
-                  <div className="d-flex gap-2 flex-wrap">
-                    {orderAdminStatuses.map((status) => (
+                <div className="d-flex gap-2 flex-wrap">
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => navigate(`/zamowienie/${order.id}`)}
+                  >
+                    Szczegóły
+                  </button>
+                  {user?.role === "admin" && ["paid", "shipped"].includes(order.status) && (
+                    orderAdminStatuses.map((status) => (
                       <button
                         key={status.value}
                         className="btn btn-sm btn-outline-primary"
@@ -1134,9 +1318,9 @@ function OrderHistory({ user, orders, changeOrderStatus }) {
                       >
                         {status.label}
                       </button>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           ))}
