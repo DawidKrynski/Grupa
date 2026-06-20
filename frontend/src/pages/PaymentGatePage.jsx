@@ -3,30 +3,31 @@ import React from "react";
 export function PaymentGatePage({ pendingPayment, loading, onPay, onCancel }) {
   if (!pendingPayment) {
     return (
-      <div className="p-4 bg-white border rounded text-center">
-        <p className="text-secondary">Brak aktywnej sesji płatności.</p>
-        <button className="btn btn-dark btn-sm" onClick={onCancel}>Wróć do serwisu</button>
-      </div>
+      <section className="page-panel page-panel--center empty-state">
+        <i className="bi bi-credit-card-2-front d-block"></i>
+        <p className="text-secondary mb-3">Brak aktywnej sesji płatności.</p>
+        <button className="btn btn-primary btn-sm" onClick={onCancel}>Wróć do serwisu</button>
+      </section>
     );
   }
 
   return (
     <div className="row justify-content-center">
       <div className="col-md-6">
-        <div className="card shadow-sm border rounded-3 overflow-hidden">
-          <div className="bg-primary text-white p-4 text-center">
-            <h2 className="h4 mb-1">VPay Secure</h2>
+        <div className="card payment-card">
+          <div className="payment-header text-white p-4 text-center">
+            <h2 className="h4 mb-1"><i className="bi bi-shield-lock me-2"></i>VPay Secure</h2>
             <small className="opacity-75">Bezpieczna autoryzacja transakcji</small>
           </div>
-          <div className="card-body p-4 bg-white">
-            <h3 className="h6 text-uppercase text-muted mb-3">Podsumowanie zamówienia</h3>
+          <div className="card-body p-4">
+            <h3 className="h6 text-uppercase text-muted mb-3">Podsumowanie</h3>
             <div className="d-flex justify-content-between border-bottom pb-2 mb-3">
               <span>{pendingPayment.serviceName} ({pendingPayment.form.bikeDescription})</span>
               <span className="fw-semibold">{pendingPayment.price.toFixed(2)} zł</span>
             </div>
 
-            <div className="bg-light p-3 rounded mb-4 text-center">
-              <span className="small text-secondary d-block">Do zapłaty:</span>
+            <div className="summary-box text-center mb-4">
+              <span className="small text-secondary d-block">Do zapłaty</span>
               <span className="fs-2 fw-bold text-dark">{pendingPayment.price.toFixed(2)} PLN</span>
             </div>
 
@@ -42,7 +43,7 @@ export function PaymentGatePage({ pendingPayment, loading, onPay, onCancel }) {
                     Przetwarzanie...
                   </>
                 ) : (
-                  <>Autoryzuj i Zapłać</>
+                  <>Autoryzuj i zapłać</>
                 )}
               </button>
               <button

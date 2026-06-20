@@ -5,13 +5,9 @@ import { RepairBooking } from "../components/RepairBooking.jsx";
 export function RepairsPage({ user, calendar, services, repairForm, setRepairForm, estimate, submitRepair }) {
   return (
     <>
-      <section className="row g-4 mb-4">
-        <div className="col-12">
-          <div className="p-4 bg-white border rounded">
-            <h1 className="h3 mb-2">Rezerwacja napraw rowerów</h1>
-            <p className="mb-0 text-secondary">Zgłoś usterkę, wybierz wolny termin z kalendarza i przejdź do bezpiecznej płatności online.</p>
-          </div>
-        </div>
+      <section className="page-panel page-header mb-4">
+        <h1 className="h3"><i className="bi bi-wrench-adjustable me-2"></i>Rezerwacja napraw</h1>
+        <p>Zgłoś usterkę, wybierz wolny termin z kalendarza i opłać usługę online.</p>
       </section>
 
       <section className="row g-4 mb-4">
