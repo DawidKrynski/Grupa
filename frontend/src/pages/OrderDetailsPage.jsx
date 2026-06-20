@@ -4,21 +4,29 @@ import { orderStatusBadgeClass, orderStatusLabel, paymentMethodLabel } from "../
 
 export function OrderDetailsPage({ order, loading, user, navigate, changeOrderStatus, onRetryPayment }) {
   if (loading) {
-    return <div className="p-4 text-center">Ładowanie zamówienia...</div>;
+    return (
+      <div className="page-panel text-center py-5">
+        <div className="spinner-border text-primary mb-2" role="status"></div>
+        <div className="text-muted">Ładowanie zamówienia...</div>
+      </div>
+    );
   }
 
   if (!order) {
     return (
-      <section className="p-4 bg-white border rounded text-center">
+      <section className="page-panel page-panel--center empty-state">
+        <i className="bi bi-receipt d-block"></i>
         <h1 className="h4 mb-3">Nie znaleziono zamówienia</h1>
-        <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>← Moje konto</button>
+        <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>Moje konto</button>
       </section>
     );
   }
 
   return (
-    <section className="p-4 bg-white border rounded">
-      <button className="btn btn-link p-0 mb-3 text-decoration-none" onClick={() => navigate("/moje-konto")}>← Moje konto</button>
+    <section className="page-panel">
+      <button className="btn btn-link p-0 mb-3 text-decoration-none text-primary" onClick={() => navigate("/moje-konto")}>
+        <i className="bi bi-arrow-left me-1"></i>Moje konto
+      </button>
 
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
         <div>
@@ -90,7 +98,7 @@ export function OrderDetailsPage({ order, loading, user, navigate, changeOrderSt
         </div>
 
         <div className="col-lg-5">
-          <div className="p-3 bg-light border rounded">
+          <div className="summary-box">
             <h2 className="h5 mb-3">Dane zamówienia</h2>
             <dl className="small mb-0">
               <dt className="text-muted">Adres dostawy</dt>
@@ -119,7 +127,7 @@ export function OrderDetailsPage({ order, loading, user, navigate, changeOrderSt
           </div>
 
           {user?.role === "admin" && ["paid", "shipped"].includes(order.status) && (
-            <div className="p-3 bg-light border rounded mt-3">
+            <div className="admin-box mt-3">
               <h3 className="h6 fw-bold mb-2">Zmiana statusu</h3>
               <div className="d-flex gap-2 flex-wrap">
                 {orderAdminStatuses.map((status) => (
@@ -142,8 +150,9 @@ export function OrderDetailsPage({ order, loading, user, navigate, changeOrderSt
 
 export function OrderGate({ navigate }) {
   return (
-    <section className="p-4 bg-white border rounded text-center">
-      <h1 className="h4 mb-3">Szczegóły zamówienia</h1>
+    <section className="page-panel page-panel--center empty-state">
+      <i className="bi bi-receipt-cutoff d-block"></i>
+      <h1 className="h4 mb-2">Szczegóły zamówienia</h1>
       <p className="text-secondary mb-3">Zaloguj się, aby zobaczyć zamówienie.</p>
       <button className="btn btn-primary" onClick={() => navigate("/logowanie")}>Logowanie</button>
     </section>

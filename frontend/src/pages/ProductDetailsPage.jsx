@@ -10,7 +10,14 @@ export function ProductDetailsPage({ product, user, onChangeStock, onAddToCart, 
     setQuantity(1);
   }, [product?.id, product?.stock]);
 
-  if (!product) return <div className="p-4 text-center">Ładowanie...</div>;
+  if (!product) {
+    return (
+      <div className="page-panel text-center py-5">
+        <div className="spinner-border text-primary mb-2" role="status"></div>
+        <div className="text-muted">Ładowanie produktu...</div>
+      </div>
+    );
+  }
 
   function handleStockSubmit(e) {
     e.preventDefault();
@@ -22,8 +29,10 @@ export function ProductDetailsPage({ product, user, onChangeStock, onAddToCart, 
   }
 
   return (
-    <section className="p-4 bg-white border rounded">
-      <button className="btn btn-link p-0 mb-3 text-decoration-none" onClick={() => navigate("/zakupy")}>← Powrót</button>
+    <section className="page-panel">
+      <button className="btn btn-link p-0 mb-3 text-decoration-none text-primary" onClick={() => navigate("/zakupy")}>
+        <i className="bi bi-arrow-left me-1"></i>Powrót do sklepu
+      </button>
       <div className="row g-4">
         <div className="col-md-5">
           <img src={product.imageUrl} alt={product.name} className="img-fluid rounded border" />
@@ -66,8 +75,8 @@ export function ProductDetailsPage({ product, user, onChangeStock, onAddToCart, 
               {product.stock > 0 ? "Dodaj do koszyka" : "Produkt niedostępny"}
             </button>
 
-            {user?.role === "admin" && (
-              <div className="p-3 bg-light border rounded mt-3">
+              {user?.role === "admin" && (
+                  <div className="admin-box mt-3">
                 <h3 className="h6 text-danger fw-bold mb-2"><i className="bi bi-gear-fill me-1"></i> Panel Administratora</h3>
                 <form onSubmit={handleStockSubmit} className="d-flex gap-2">
                   <div className="flex-grow-1">

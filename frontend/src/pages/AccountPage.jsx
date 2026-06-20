@@ -6,10 +6,11 @@ export function AccountPage({ user, repairs, orders, changeStatus, changeOrderSt
   return (
     <div className="row g-4">
       <div className="col-lg-4">
-        <section className="p-4 bg-white border rounded">
-          <h1 className="h4 mb-3">Konto</h1>
-          <p className="mb-1"><strong>Zalogowany jako:</strong> {user.firstName} {user.lastName}</p>
-          <p className="text-muted small">{user.email}</p>
+        <section className="account-card">
+          <h1 className="h4 mb-3"><i className="bi bi-person-circle me-2"></i>Twoje konto</h1>
+          <p className="mb-1 fw-semibold">{user.firstName} {user.lastName}</p>
+          <p className="text-muted small mb-2">{user.email}</p>
+          <span className="badge bg-light text-dark">{user.role === "admin" ? "Administrator" : "Klient"}</span>
         </section>
       </div>
       <div className="col-lg-8">
@@ -24,8 +25,10 @@ export function AccountPage({ user, repairs, orders, changeStatus, changeOrderSt
 
 export function AccountGate({ navigate }) {
   return (
-    <section className="p-4 bg-white border rounded">
-      <h1 className="h4 mb-3">Moje konto</h1>
+    <section className="page-panel page-panel--center empty-state">
+      <i className="bi bi-person-lock d-block"></i>
+      <h1 className="h4 mb-2">Moje konto</h1>
+      <p className="text-secondary mb-3">Zaloguj się, aby zobaczyć zamówienia i naprawy.</p>
       <button className="btn btn-primary" onClick={() => navigate("/logowanie")}>Logowanie</button>
     </section>
   );
