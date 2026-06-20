@@ -2,7 +2,7 @@ import React from "react";
 
 export function RepairBooking({ user, services, repairForm, setRepairForm, estimate, submitRepair }) {
   return (
-    <div className="p-4 bg-white border rounded">
+    <div className="page-panel h-100">
       <h2 className="h5 mb-3">Zlecenie naprawy</h2>
       {!user && <div className="alert alert-warning py-1 small">Zaloguj się, by złożyć zlecenie.</div>}
       <form onSubmit={submitRepair}>
