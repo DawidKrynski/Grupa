@@ -4,14 +4,14 @@ import { orderStatusBadgeClass, orderStatusLabel } from "../utils/labels.js";
 
 export function OrderHistory({ user, orders, changeOrderStatus, navigate }) {
   return (
-    <section className="p-4 bg-white border rounded">
+    <section className="page-panel">
       <h2 className="h5 mb-3">Historia zamówień</h2>
       {orders.length === 0 ? (
         <p className="text-secondary small mb-0">Brak zamówień.</p>
       ) : (
         <div className="d-flex flex-column gap-3">
           {orders.map((order) => (
-            <div className="border rounded p-3" key={order.id}>
+            <div className="history-item" key={order.id}>
               <div className="d-flex justify-content-between align-items-start mb-2">
                 <div>
                   <strong>Zamówienie #{order.id}</strong>

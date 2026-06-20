@@ -49,6 +49,8 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productFilters, setProductFilters] = useState({ search: "", category: "" });
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
 
   const [cart, setCart] = useState(loadCartFromStorage);
   const [orders, setOrders] = useState([]);
@@ -91,6 +93,10 @@ export default function App() {
   useEffect(() => {
     if (path === "/zakupy") loadProducts();
   }, [path, productFilters]);
+
+  useEffect(() => {
+    if (path === "/") loadFeaturedProducts();
+  }, [path]);
 
   useEffect(() => {
     if (path === "/koszyk" && cart.length > 0) {
@@ -151,6 +157,22 @@ export default function App() {
       console.error(err);
     } finally {
       setProductsLoading(false);
+    }
+  }
+
+  async function loadFeaturedProducts() {
+    setFeaturedLoading(true);
+    try {
+      const data = await request(`${PRODUCT_API}/products`);
+      const featured = (data || [])
+        .filter((product) => product.stock > 0)
+        .slice(0, 5);
+      setFeaturedProducts(featured);
+    } catch (err) {
+      console.error(err);
+      setFeaturedProducts([]);
+    } finally {
+      setFeaturedLoading(false);
     }
   }
 
@@ -592,13 +614,20 @@ export default function App() {
 
       <main className="container py-4">
         {message && (
-          <div className={`alert ${message.startsWith("Błąd") ? "alert-danger" : "alert-success"} py-2`}>
+          <div className={`alert app-alert ${message.startsWith("Błąd") ? "alert-danger" : "alert-success"} py-2`}>
             {message}
           </div>
         )}
 
         {!validPath && <NotFound navigate={navigate} />}
-        {path === "/" && <HomePage navigate={navigate} />}
+        {path === "/" && (
+          <HomePage
+            navigate={navigate}
+            featuredProducts={featuredProducts}
+            featuredLoading={featuredLoading}
+            onAddToCart={addToCart}
+          />
+        )}
 
         {path === "/zakupy" && (
           <ProductCatalogPage
@@ -710,8 +739,11 @@ export default function App() {
         )}
       </main>
 
-      <footer className="border-top bg-white py-3">
-        <div className="container small text-secondary">© 2026 VeloShop</div>
+      <footer className="site-footer">
+        <div className="container d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <strong>VeloShop</strong>
+          <span className="small">© 2026 — sklep i serwis rowerowy</span>
+        </div>
       </footer>
     </div>
   );

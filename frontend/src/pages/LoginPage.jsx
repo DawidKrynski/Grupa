@@ -2,10 +2,14 @@ import React from "react";
 
 export function AuthPanel({ authMode, setAuthMode, authForm, setAuthForm, submitAuth }) {
   return (
-    <div className="p-4 bg-white border rounded">
+    <div className="page-panel">
+      <div className="page-header text-center">
+        <h1 className="h4">Witaj w VeloShop</h1>
+        <p>Zaloguj się lub utwórz nowe konto.</p>
+      </div>
       <div className="d-flex gap-2 mb-3">
-        <button className={`btn btn-sm ${authMode === "login" ? "btn-dark" : "btn-outline-dark"}`} onClick={() => setAuthMode("login")}>Logowanie</button>
-        <button className={`btn btn-sm ${authMode === "register" ? "btn-dark" : "btn-outline-dark"}`} onClick={() => setAuthMode("register")}>Rejestracja</button>
+        <button className={`btn btn-sm flex-fill ${authMode === "login" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setAuthMode("login")}>Logowanie</button>
+        <button className={`btn btn-sm flex-fill ${authMode === "register" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setAuthMode("register")}>Rejestracja</button>
       </div>
       <form onSubmit={submitAuth}>
         {authMode === "register" && (
@@ -25,7 +29,7 @@ export function AuthPanel({ authMode, setAuthMode, authForm, setAuthForm, submit
 export function LoginPage({ user, navigate, authMode, setAuthMode, authForm, setAuthForm, submitAuth }) {
   if (user) {
     return (
-      <section className="p-4 bg-white border rounded">
+      <section className="page-panel page-panel--center">
         <h1 className="h4 mb-3">Jesteś zalogowany</h1>
         <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>Przejdź do mojego konta</button>
       </section>

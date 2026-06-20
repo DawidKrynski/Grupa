@@ -6,7 +6,7 @@ export function RepairCalendar({ calendar, selectedDate, setSelectedDate, user }
   const leadingEmptyDays = calendar.length ? (new Date(`${calendar[0].date}T12:00:00`).getDay() || 7) - 1 : 0;
 
   return (
-    <div className="p-4 bg-white border rounded h-100">
+    <div className="page-panel h-100">
       <h2 className="h5 mb-3">Kalendarz terminów</h2>
       <div className="calendar-weekdays">
         {weekdays.map((day) => <div key={day}>{day}</div>)}
