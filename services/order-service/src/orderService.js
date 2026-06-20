@@ -227,9 +227,86 @@ async function updateOrderStatus(orderId, status) {
   return Order.findByPk(order.id, { include: orderInclude });
 }
 
+async function retryOrderPayment(user, orderId) {
+  const order = await Order.findByPk(orderId, { include: orderInclude });
+
+  if (!order) {
+    const error = new Error("Zamówienie nie istnieje");
+    error.status = 404;
+    throw error;
+  }
+
+  if (user.role !== "admin" && order.userId !== user.id) {
+    const error = new Error("Brak uprawnień");
+    error.status = 403;
+    throw error;
+  }
+
+  if (order.status !== "failed") {
+    const error = new Error("Ponowienie płatności możliwe tylko dla nieudanych zamówień");
+    error.status = 400;
+    throw error;
+  }
+
+  const reservedItems = [];
+
+  try {
+    for (const item of order.OrderItems) {
+      const product = await getProduct(item.productId);
+
+      if (product.stock < item.quantity) {
+        const error = new Error(`Niewystarczający stan magazynowy produktu: ${product.name}`);
+        error.status = 409;
+        throw error;
+      }
+
+      await reserveProduct(item.productId, item.quantity);
+      reservedItems.push({ productId: item.productId, quantity: item.quantity });
+    }
+
+    await order.update({
+      status: "pending",
+      paymentMessage: null,
+      paymentTransactionId: null
+    });
+
+    const payment = await processPayment(order.id, order.totalAmount);
+
+    if (payment.ok && payment.data?.success) {
+      await order.update({
+        status: "paid",
+        paymentTransactionId: payment.data.transactionId || null,
+        paymentMessage: payment.data.message || "Płatność zrealizowana pomyślnie."
+      });
+    } else {
+      await order.update({
+        status: "failed",
+        paymentMessage: payment.data?.message || "Płatność została odrzucona."
+      });
+
+      for (const item of reservedItems) {
+        await releaseProduct(item.productId, item.quantity);
+      }
+    }
+
+    return Order.findByPk(order.id, { include: orderInclude });
+  } catch (error) {
+    for (const item of reservedItems) {
+      try {
+        await releaseProduct(item.productId, item.quantity);
+      } catch {
+        // Ignoruj błędy przy cofaniu rezerwacji po wcześniejszym błędzie.
+      }
+    }
+
+    throw error;
+  }
+}
+
 module.exports = {
   createOrder,
   listOrders,
   getOrderById,
-  updateOrderStatus
+  updateOrderStatus,
+  retryOrderPayment
 };

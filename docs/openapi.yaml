@@ -216,6 +216,33 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /orders/{id}/retry-payment:
+    servers:
+      - url: http://localhost:4003
+    post:
+      tags:
+        - Order Service
+      summary: Ponowienie płatności
+      description: Dla zamówień ze statusem failed — ponowna rezerwacja i próba płatności bez tworzenia nowego zamówienia.
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Zaktualizowane zamówienie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /repair-services:
     servers:
       - url: http://localhost:4005
