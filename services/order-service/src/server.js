@@ -63,6 +63,15 @@ app.patch("/orders/:id/status", authMiddleware, requireAdmin, async (req, res) =
   }
 });
 
+app.post("/orders/:id/retry-payment", authMiddleware, async (req, res) => {
+  try {
+    const order = await orderService.retryOrderPayment(req.user, req.params.id);
+    res.json(order);
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message });
+  }
+});
+
 sequelize.sync({ alter: true }).then(() => {
   app.listen(port, () => {
     console.log(`Order Service działa na porcie ${port}`);
