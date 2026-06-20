@@ -7,12 +7,27 @@ import "./styles.css";
 const USER_API = "http://localhost:4001";
 const REPAIR_API = "http://localhost:4005";
 const PRODUCT_API = "http://localhost:3002";
+const ORDER_API = "http://localhost:4003";
 const PAYMENT_API = "http://localhost:4006";
 
 const finalStatuses = [
   { value: "completed", label: "Oznacz jako zrealizowane" },
   { value: "cancelled", label: "Oznacz jako anulowane" }
 ];
+
+const orderAdminStatuses = [
+  { value: "shipped", label: "Oznacz jako wysłane" },
+  { value: "completed", label: "Oznacz jako zrealizowane" },
+  { value: "cancelled", label: "Oznacz jako anulowane" }
+];
+
+function loadCartFromStorage() {
+  try {
+    return JSON.parse(localStorage.getItem("veloshopCart") || "[]");
+  } catch {
+    return [];
+  }
+}
 
 function todayKey() {
   const date = new Date();
@@ -40,6 +55,31 @@ function statusLabel(status) {
   };
 
   return labels[status] || status;
+}
+
+function orderStatusLabel(status) {
+  const labels = {
+    pending: "oczekujące",
+    paid: "opłacone",
+    failed: "płatność nieudana",
+    shipped: "wysłane",
+    completed: "zrealizowane",
+    cancelled: "anulowane"
+  };
+
+  return labels[status] || status;
+}
+
+function orderStatusBadgeClass(status) {
+  if (["paid", "shipped", "completed"].includes(status)) return "bg-success";
+  if (status === "failed") return "bg-danger";
+  if (status === "cancelled") return "bg-dark";
+  return "bg-secondary";
+}
+
+function paymentMethodLabel(method) {
+  const labels = { card: "Karta płatnicza", blik: "BLIK" };
+  return labels[method] || method;
 }
 
 function App() {
@@ -70,10 +110,24 @@ function App() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [productFilters, setProductFilters] = useState({ search: "", category: "" });
 
+  const [cart, setCart] = useState(loadCartFromStorage);
+  const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orderDetailsLoading, setOrderDetailsLoading] = useState(false);
+  const [checkoutForm, setCheckoutForm] = useState({ deliveryAddress: "", paymentMethod: "card" });
+  const [orderLoading, setOrderLoading] = useState(false);
+
   const headers = useMemo(() => ({
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`
   }), [token]);
+
+  const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
+  const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
+
+  useEffect(() => {
+    localStorage.setItem("veloshopCart", JSON.stringify(cart));
+  }, [cart]);
 
   useEffect(() => {
     loadPublicData();
@@ -104,6 +158,15 @@ function App() {
       if (productId) loadSingleProduct(productId);
     }
   }, [path]);
+
+  useEffect(() => {
+    if (path.startsWith("/zamowienie/")) {
+      const orderId = path.split("/")[2];
+      if (orderId) loadSingleOrder(orderId);
+    } else {
+      setSelectedOrder(null);
+    }
+  }, [path, token]);
 
   async function request(url, options = {}) {
     const response = await fetch(url, options);
@@ -165,9 +228,37 @@ function App() {
         headers: { Authorization: `Bearer ${nextToken}` }
       });
       setUser(profile);
-      await loadRepairs(nextToken);
+      await Promise.all([
+        loadRepairs(nextToken),
+        loadOrders(nextToken)
+      ]);
     } catch {
       logout();
+    }
+  }
+
+  async function loadOrders(nextToken = token) {
+    const data = await request(`${ORDER_API}/orders`, {
+      headers: { Authorization: `Bearer ${nextToken}` }
+    });
+    setOrders(data);
+  }
+
+  async function loadSingleOrder(id) {
+    if (!token) {
+      setSelectedOrder(null);
+      return;
+    }
+
+    setOrderDetailsLoading(true);
+
+    try {
+      const data = await request(`${ORDER_API}/orders/${id}`, { headers });
+      setSelectedOrder(data);
+    } catch {
+      setSelectedOrder(null);
+    } finally {
+      setOrderDetailsLoading(false);
     }
   }
 
@@ -211,6 +302,116 @@ function App() {
     } catch (error) {
       setMessage(error.message);
     }
+  }
+
+  function addToCart(product, quantity = 1) {
+    if (product.stock <= 0) {
+      setMessage("Błąd: Produkt jest niedostępny.");
+      return;
+    }
+
+    setCart((prev) => {
+      const existing = prev.find((item) => item.productId === product.id);
+
+      if (existing) {
+        const nextQuantity = Math.min(existing.quantity + quantity, product.stock);
+        return prev.map((item) => item.productId === product.id
+          ? { ...item, quantity: nextQuantity }
+          : item);
+      }
+
+      return [...prev, {
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        imageUrl: product.imageUrl,
+        stock: product.stock,
+        quantity: Math.min(quantity, product.stock)
+      }];
+    });
+    setMessage(`Dodano "${product.name}" do koszyka.`);
+  }
+
+  function removeFromCart(productId) {
+    setCart((prev) => prev.filter((item) => item.productId !== productId));
+  }
+
+  function updateCartQuantity(productId, quantity) {
+    setCart((prev) => prev.map((item) => {
+      if (item.productId !== productId) {
+        return item;
+      }
+
+      const nextQuantity = Math.max(1, Math.min(Number(quantity), item.stock));
+      return { ...item, quantity: nextQuantity };
+    }));
+  }
+
+  async function submitOrder(event) {
+    event.preventDefault();
+    setMessage("");
+
+    if (!user) {
+      setMessage("Zaloguj się, aby złożyć zamówienie.");
+      navigate("/logowanie");
+      return;
+    }
+
+    if (cart.length === 0) {
+      setMessage("Błąd: Koszyk jest pusty.");
+      return;
+    }
+
+    if (!checkoutForm.deliveryAddress.trim()) {
+      setMessage("Błąd: Podaj adres dostawy.");
+      return;
+    }
+
+    setOrderLoading(true);
+
+    try {
+      const order = await request(`${ORDER_API}/orders`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+          deliveryAddress: checkoutForm.deliveryAddress.trim(),
+          paymentMethod: checkoutForm.paymentMethod
+        })
+      });
+
+      if (order.status === "paid") {
+        setCart([]);
+        setCheckoutForm({ deliveryAddress: "", paymentMethod: "card" });
+        setOrders([order, ...orders]);
+        setMessage("Zamówienie opłacone i złożone pomyślnie!");
+        navigate(`/zamowienie/${order.id}`);
+      } else {
+        setMessage(`Błąd płatności: ${order.paymentMessage || "Płatność nieudana."}`);
+      }
+
+      if (path === "/zakupy") {
+        await loadProducts();
+      }
+    } catch (error) {
+      setMessage(`Błąd: ${error.message}`);
+    } finally {
+      setOrderLoading(false);
+    }
+  }
+
+  async function changeOrderStatus(order, status) {
+    const updated = await request(`${ORDER_API}/orders/${order.id}/status`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ status })
+    });
+
+    setOrders(orders.map((item) => item.id === updated.id ? updated : item));
+    if (selectedOrder?.id === updated.id) {
+      setSelectedOrder(updated);
+    }
+    setMessage(`Status zamówienia #${updated.id} zmieniony na: ${orderStatusLabel(updated.status)}.`);
   }
 
   function handleGoToPayment(event) {
@@ -302,6 +503,7 @@ function App() {
     setToken("");
     setUser(null);
     setRepairs([]);
+    setOrders([]);
     setAccountMenuOpen(false);
     navigate("/");
   }
@@ -366,7 +568,8 @@ function App() {
   }, []);
 
   const isProductDetailsPath = path.startsWith("/produkt/");
-  const validPath = path === "/" || path === "/naprawy" || path === "/logowanie" || path === "/moje-konto" || path === "/zakupy" || path === "/platnosc" || isProductDetailsPath;
+  const isOrderDetailsPath = path.startsWith("/zamowienie/");
+  const validPath = path === "/" || path === "/naprawy" || path === "/logowanie" || path === "/moje-konto" || path === "/zakupy" || path === "/koszyk" || path === "/platnosc" || isProductDetailsPath || isOrderDetailsPath;
 
   return (
       <div className="app-shell">
@@ -379,6 +582,14 @@ function App() {
               </button>
               <button className={`btn btn-sm ${path === "/naprawy" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/naprawy")}>
                 Naprawy rowerowe
+              </button>
+              <button className={`btn btn-sm position-relative ${path === "/koszyk" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/koszyk")}>
+                <i className="bi bi-cart3 me-1"></i> Koszyk
+                {cartCount > 0 && (
+                  <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {cartCount}
+                  </span>
+                )}
               </button>
               {!user && (
                   <button className={`btn btn-sm ${path === "/logowanie" ? "btn-light" : "btn-outline-light"}`} onClick={() => navigate("/logowanie")}>
@@ -425,6 +636,7 @@ function App() {
                   user={user}
                   onAddProduct={handleAddProduct}
                   onDeleteProduct={handleIdDeleteProduct}
+                  onAddToCart={addToCart}
               />
           )}
 
@@ -433,6 +645,40 @@ function App() {
                   product={selectedProduct}
                   user={user}
                   onChangeStock={changeProductStock}
+                  onAddToCart={addToCart}
+                  navigate={navigate}
+              />
+          )}
+
+          {isOrderDetailsPath && (
+              user ? (
+                  <OrderDetailsPage
+                      order={selectedOrder}
+                      loading={orderDetailsLoading}
+                      user={user}
+                      navigate={navigate}
+                      changeOrderStatus={changeOrderStatus}
+                  />
+              ) : (
+                  <section className="p-4 bg-white border rounded text-center">
+                    <h1 className="h4 mb-3">Szczegóły zamówienia</h1>
+                    <p className="text-secondary mb-3">Zaloguj się, aby zobaczyć zamówienie.</p>
+                    <button className="btn btn-primary" onClick={() => navigate("/logowanie")}>Logowanie</button>
+                  </section>
+              )
+          )}
+
+          {path === "/koszyk" && (
+              <CartPage
+                  cart={cart}
+                  cartTotal={cartTotal}
+                  user={user}
+                  checkoutForm={checkoutForm}
+                  setCheckoutForm={setCheckoutForm}
+                  onRemove={removeFromCart}
+                  onUpdateQuantity={updateCartQuantity}
+                  onSubmitOrder={submitOrder}
+                  loading={orderLoading}
                   navigate={navigate}
               />
           )}
@@ -463,7 +709,15 @@ function App() {
 
           {path === "/moje-konto" && (
               user ? (
-                  <AccountPage user={user} repairs={repairs} changeStatus={changeStatus} clearHistory={clearHistory} />
+                  <AccountPage
+                      user={user}
+                      repairs={repairs}
+                      orders={orders}
+                      changeStatus={changeStatus}
+                      changeOrderStatus={changeOrderStatus}
+                      clearHistory={clearHistory}
+                      navigate={navigate}
+                  />
               ) : (
                   <section className="p-4 bg-white border rounded">
                     <h1 className="h4 mb-3">Moje konto</h1>
@@ -564,7 +818,7 @@ function PaymentGatePage({ pendingPayment, loading, onPay, onCancel }) {
   );
 }
 
-function ProductCatalogPage({ products, categories, filters, setFilters, loading, navigate, user, onAddProduct, onDeleteProduct }) {
+function ProductCatalogPage({ products, categories, filters, setFilters, loading, navigate, user, onAddProduct, onDeleteProduct, onAddToCart }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: "", description: "", price: "", imageUrl: "", category: "", stock: "0"
@@ -645,6 +899,16 @@ function ProductCatalogPage({ products, categories, filters, setFilters, loading
                         <div className="d-flex gap-1 mt-auto justify-content-center">
                           <button className="btn btn-sm btn-outline-dark flex-grow-1" onClick={() => navigate(`/produkt/${product.id}`)}>Szczegóły</button>
 
+                          {product.stock > 0 && (
+                            <button
+                              className="btn btn-sm btn-primary"
+                              title="Dodaj do koszyka"
+                              onClick={() => onAddToCart(product)}
+                            >
+                              <i className="bi bi-cart-plus"></i>
+                            </button>
+                          )}
+
                           {user?.role === "admin" && (
                               <button
                                   className="btn btn-sm btn-outline-danger"
@@ -666,7 +930,7 @@ function ProductCatalogPage({ products, categories, filters, setFilters, loading
   );
 }
 
-function ProductDetailsPage({ product, user, onChangeStock, navigate }) {
+function ProductDetailsPage({ product, user, onChangeStock, onAddToCart, navigate }) {
   if (!product) return <div className="p-4 text-center">Ładowanie...</div>;
 
   const [inputStock, setInputStock] = useState(product.stock);
@@ -707,6 +971,7 @@ function ProductDetailsPage({ product, user, onChangeStock, navigate }) {
               <button
                   className="btn btn-primary"
                   disabled={product.stock <= 0}
+                  onClick={() => onAddToCart(product)}
               >
                 {product.stock > 0 ? "Dodaj do koszyka" : "Produkt niedostępny"}
               </button>
@@ -746,6 +1011,7 @@ function HomePage({ navigate }) {
         <p className="text-secondary mb-4">Witaj w systemie obsługi salonu rowerowego.</p>
         <div className="d-flex justify-content-center gap-2">
           <button className="btn btn-primary" onClick={() => navigate("/zakupy")}>Zakupy</button>
+          <button className="btn btn-outline-primary" onClick={() => navigate("/koszyk")}>Koszyk</button>
           <button className="btn btn-outline-dark" onClick={() => navigate("/naprawy")}>Serwis napraw</button>
         </div>
       </section>
@@ -778,7 +1044,7 @@ function AuthPanel({ authMode, setAuthMode, authForm, setAuthForm, submitAuth })
   );
 }
 
-function AccountPage({ user, repairs, changeStatus, clearHistory }) {
+function AccountPage({ user, repairs, orders, changeStatus, changeOrderStatus, clearHistory, navigate }) {
   return (
       <div className="row g-4">
         <div className="col-lg-4">
@@ -789,9 +1055,278 @@ function AccountPage({ user, repairs, changeStatus, clearHistory }) {
           </section>
         </div>
         <div className="col-lg-8">
-          <RepairHistory user={user} repairs={repairs} changeStatus={changeStatus} clearHistory={clearHistory} />
+          <OrderHistory user={user} orders={orders} changeOrderStatus={changeOrderStatus} navigate={navigate} />
+          <div className="mt-4">
+            <RepairHistory user={user} repairs={repairs} changeStatus={changeStatus} clearHistory={clearHistory} />
+          </div>
         </div>
       </div>
+  );
+}
+
+function CartPage({ cart, cartTotal, user, checkoutForm, setCheckoutForm, onRemove, onUpdateQuantity, onSubmitOrder, loading, navigate }) {
+  if (cart.length === 0) {
+    return (
+      <section className="p-4 bg-white border rounded text-center">
+        <h1 className="h4 mb-3">Koszyk</h1>
+        <p className="text-secondary mb-3">Twój koszyk jest pusty.</p>
+        <button className="btn btn-primary" onClick={() => navigate("/zakupy")}>Przejdź do sklepu</button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="p-4 bg-white border rounded">
+      <h1 className="h3 mb-4">Koszyk</h1>
+      <div className="row g-4">
+        <div className="col-lg-7">
+          <div className="d-flex flex-column gap-3">
+            {cart.map((item) => (
+              <div className="d-flex gap-3 border rounded p-3 align-items-center" key={item.productId}>
+                <img src={item.imageUrl} alt={item.name} className="rounded" style={{ width: "72px", height: "72px", objectFit: "cover" }} />
+                <div className="flex-grow-1">
+                  <strong className="d-block">{item.name}</strong>
+                  <span className="text-muted small">{item.price.toFixed(2)} PLN / szt.</span>
+                </div>
+                <input
+                  type="number"
+                  className="form-control form-control-sm"
+                  style={{ width: "72px" }}
+                  min="1"
+                  max={item.stock}
+                  value={item.quantity}
+                  onChange={(e) => onUpdateQuantity(item.productId, e.target.value)}
+                />
+                <strong className="text-nowrap">{(item.price * item.quantity).toFixed(2)} PLN</strong>
+                <button className="btn btn-sm btn-outline-danger" onClick={() => onRemove(item.productId)} title="Usuń">
+                  <i className="bi bi-trash"></i>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="col-lg-5">
+          <div className="p-4 bg-light border rounded">
+            <h2 className="h5 mb-3">Podsumowanie</h2>
+            <div className="d-flex justify-content-between mb-3">
+              <span>Razem:</span>
+              <strong>{cartTotal.toFixed(2)} PLN</strong>
+            </div>
+
+            {!user && (
+              <div className="alert alert-warning py-2 small">
+                Zaloguj się, aby złożyć zamówienie.
+              </div>
+            )}
+
+            <form onSubmit={onSubmitOrder}>
+              <div className="mb-3">
+                <label className="form-label small">Adres dostawy</label>
+                <input
+                  className="form-control"
+                  placeholder="ul. Rowerowa 1, Warszawa"
+                  value={checkoutForm.deliveryAddress}
+                  onChange={(e) => setCheckoutForm({ ...checkoutForm, deliveryAddress: e.target.value })}
+                  disabled={!user || loading}
+                  required
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label small">Metoda płatności</label>
+                <select
+                  className="form-select"
+                  value={checkoutForm.paymentMethod}
+                  onChange={(e) => setCheckoutForm({ ...checkoutForm, paymentMethod: e.target.value })}
+                  disabled={!user || loading}
+                >
+                  <option value="card">Karta płatnicza</option>
+                  <option value="blik">BLIK</option>
+                </select>
+              </div>
+              <button className="btn btn-success w-100" disabled={!user || loading}>
+                {loading ? "Przetwarzanie..." : "Złóż i opłać zamówienie"}
+              </button>
+              {!user && (
+                <button type="button" className="btn btn-outline-primary w-100 mt-2" onClick={() => navigate("/logowanie")}>
+                  Zaloguj się
+                </button>
+              )}
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OrderDetailsPage({ order, loading, user, navigate, changeOrderStatus }) {
+  if (loading) {
+    return <div className="p-4 text-center">Ładowanie zamówienia...</div>;
+  }
+
+  if (!order) {
+    return (
+      <section className="p-4 bg-white border rounded text-center">
+        <h1 className="h4 mb-3">Nie znaleziono zamówienia</h1>
+        <button className="btn btn-primary" onClick={() => navigate("/moje-konto")}>← Moje konto</button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="p-4 bg-white border rounded">
+      <button className="btn btn-link p-0 mb-3 text-decoration-none" onClick={() => navigate("/moje-konto")}>← Moje konto</button>
+
+      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+        <div>
+          <h1 className="h3 mb-1">Zamówienie #{order.id}</h1>
+          <small className="text-muted">
+            {new Date(order.createdAt).toLocaleString("pl-PL")}
+          </small>
+        </div>
+        <span className={`badge ${orderStatusBadgeClass(order.status)} p-2`}>
+          {orderStatusLabel(order.status)}
+        </span>
+      </div>
+
+      <div className="row g-4">
+        <div className="col-lg-7">
+          <h2 className="h5 mb-3">Pozycje</h2>
+          <div className="table-responsive">
+            <table className="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Produkt</th>
+                  <th className="text-center">Ilość</th>
+                  <th className="text-end">Cena</th>
+                  <th className="text-end">Razem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(order.OrderItems || []).map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.productName}</td>
+                    <td className="text-center">{item.quantity}</td>
+                    <td className="text-end">{item.unitPrice.toFixed(2)} PLN</td>
+                    <td className="text-end">{(item.unitPrice * item.quantity).toFixed(2)} PLN</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="3" className="text-end fw-bold">Suma:</td>
+                  <td className="text-end fw-bold">{order.totalAmount.toFixed(2)} PLN</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div className="col-lg-5">
+          <div className="p-3 bg-light border rounded">
+            <h2 className="h5 mb-3">Dane zamówienia</h2>
+            <dl className="small mb-0">
+              <dt className="text-muted">Adres dostawy</dt>
+              <dd>{order.deliveryAddress}</dd>
+              <dt className="text-muted">Metoda płatności</dt>
+              <dd>{paymentMethodLabel(order.paymentMethod)}</dd>
+              {order.paymentTransactionId && (
+                <>
+                  <dt className="text-muted">ID transakcji</dt>
+                  <dd>{order.paymentTransactionId}</dd>
+                </>
+              )}
+              {order.paymentMessage && (
+                <>
+                  <dt className="text-muted">Płatność</dt>
+                  <dd>{order.paymentMessage}</dd>
+                </>
+              )}
+              {user?.role === "admin" && (
+                <>
+                  <dt className="text-muted">Klient</dt>
+                  <dd>{order.userEmail}</dd>
+                </>
+              )}
+            </dl>
+          </div>
+
+          {user?.role === "admin" && ["paid", "shipped"].includes(order.status) && (
+            <div className="p-3 bg-light border rounded mt-3">
+              <h3 className="h6 fw-bold mb-2">Zmiana statusu</h3>
+              <div className="d-flex gap-2 flex-wrap">
+                {orderAdminStatuses.map((status) => (
+                  <button
+                    key={status.value}
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => changeOrderStatus(order, status.value)}
+                  >
+                    {status.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OrderHistory({ user, orders, changeOrderStatus, navigate }) {
+  return (
+    <section className="p-4 bg-white border rounded">
+      <h2 className="h5 mb-3">Historia zamówień</h2>
+      {orders.length === 0 ? (
+        <p className="text-secondary small mb-0">Brak zamówień.</p>
+      ) : (
+        <div className="d-flex flex-column gap-3">
+          {orders.map((order) => (
+            <div className="border rounded p-3" key={order.id}>
+              <div className="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                  <strong>Zamówienie #{order.id}</strong>
+                  <small className="d-block text-muted">{order.deliveryAddress}</small>
+                </div>
+                <span className={`badge ${orderStatusBadgeClass(order.status)}`}>
+                  {orderStatusLabel(order.status)}
+                </span>
+              </div>
+              <ul className="small mb-2 ps-3">
+                {(order.OrderItems || []).map((item) => (
+                  <li key={item.id}>
+                    {item.productName} × {item.quantity} — {(item.unitPrice * item.quantity).toFixed(2)} PLN
+                  </li>
+                ))}
+              </ul>
+              <div className="d-flex justify-content-between align-items-center">
+                <strong>{order.totalAmount.toFixed(2)} PLN</strong>
+                <div className="d-flex gap-2 flex-wrap">
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => navigate(`/zamowienie/${order.id}`)}
+                  >
+                    Szczegóły
+                  </button>
+                  {user?.role === "admin" && ["paid", "shipped"].includes(order.status) && (
+                    orderAdminStatuses.map((status) => (
+                      <button
+                        key={status.value}
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => changeOrderStatus(order, status.value)}
+                      >
+                        {status.label}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

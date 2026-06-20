@@ -2,14 +2,17 @@ openapi: 3.0.3
 info:
   title: VeloShop API
   version: 0.1.0
-  description: API dla serwisu użytkowników i serwisu napraw rowerowych.
+  description: API dla serwisu użytkowników, zamówień i serwisu napraw rowerowych.
 servers:
   - url: http://localhost:4001
     description: User Service
+  - url: http://localhost:4003
+    description: Order Service
   - url: http://localhost:4005
     description: Repair Service
 tags:
   - name: User Service
+  - name: Order Service
   - name: Repair Service
 security:
   - bearerAuth: []
@@ -18,6 +21,7 @@ paths:
     get:
       tags:
         - User Service
+        - Order Service
         - Repair Service
       summary: Status serwisu
       security: []
@@ -106,6 +110,110 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /orders:
+    servers:
+      - url: http://localhost:4003
+    get:
+      tags:
+        - Order Service
+      summary: Lista zamówień
+      description: Klient widzi własne zamówienia, administrator widzi wszystkie.
+      responses:
+        "200":
+          description: Lista zamówień
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags:
+        - Order Service
+      summary: Złożenie zamówienia
+      description: Rezerwuje produkty w Product Service i inicjuje płatność w Payment Service.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+            example:
+              items:
+                - productId: 3
+                  quantity: 1
+              deliveryAddress: ul. Rowerowa 1, Warszawa
+              paymentMethod: card
+      responses:
+        "201":
+          description: Zamówienie utworzone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /orders/{id}:
+    servers:
+      - url: http://localhost:4003
+    get:
+      tags:
+        - Order Service
+      summary: Szczegóły zamówienia
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Zamówienie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /orders/{id}/status:
+    servers:
+      - url: http://localhost:4003
+    patch:
+      tags:
+        - Order Service
+      summary: Zmiana statusu zamówienia
+      description: Endpoint administracyjny.
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderStatusRequest"
+            example:
+              status: shipped
+      responses:
+        "200":
+          description: Zaktualizowane zamówienie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /repair-services:
@@ -316,6 +424,13 @@ components:
       bearerFormat: JWT
   parameters:
     RepairId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1
+    OrderId:
       name: id
       in: path
       required: true
@@ -591,3 +706,114 @@ components:
       properties:
         status:
           $ref: "#/components/schemas/RepairStatus"
+    CreateOrderRequest:
+      type: object
+      required:
+        - items
+        - deliveryAddress
+        - paymentMethod
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/OrderItemInput"
+        deliveryAddress:
+          type: string
+          example: ul. Rowerowa 1, Warszawa
+        paymentMethod:
+          type: string
+          example: card
+    OrderItemInput:
+      type: object
+      required:
+        - productId
+        - quantity
+      properties:
+        productId:
+          type: integer
+          example: 3
+        quantity:
+          type: integer
+          minimum: 1
+          example: 1
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        userId:
+          type: integer
+          example: 1
+        userEmail:
+          type: string
+          format: email
+          example: user@user.user
+        deliveryAddress:
+          type: string
+          example: ul. Rowerowa 1, Warszawa
+        paymentMethod:
+          type: string
+          example: card
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        totalAmount:
+          type: number
+          example: 249
+        paymentTransactionId:
+          type: string
+          nullable: true
+          example: TXN-ABC123XYZ
+        paymentMessage:
+          type: string
+          nullable: true
+          example: Płatność zrealizowana pomyślnie.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        OrderItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        productId:
+          type: integer
+          example: 3
+        productName:
+          type: string
+          example: Kask Abus Macator
+        quantity:
+          type: integer
+          example: 1
+        unitPrice:
+          type: number
+          example: 249
+        OrderId:
+          type: integer
+          example: 1
+    OrderStatus:
+      type: string
+      enum:
+        - pending
+        - paid
+        - failed
+        - shipped
+        - completed
+        - cancelled
+      example: paid
+    UpdateOrderStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/OrderStatus"

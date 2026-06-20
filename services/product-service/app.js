@@ -129,6 +129,33 @@ app.get("/products/:id", async (req, res) => {
     }
 });
 
+app.post("/products/:id/reserve", async (req, res) => {
+    try {
+        const { quantity } = req.body;
+
+        if (!quantity || Number(quantity) < 1) {
+            return res.status(400).json({ message: "Nieprawidłowa ilość." });
+        }
+
+        const product = await Product.findByPk(req.params.id);
+        if (!product) {
+            return res.status(404).json({ message: "Nie znaleziono produktu." });
+        }
+
+        if (product.stock < Number(quantity)) {
+            return res.status(409).json({ message: "Niewystarczający stan magazynowy." });
+        }
+
+        product.stock -= Number(quantity);
+        await product.save();
+
+        console.log(`[Product] Zarezerwowano ${quantity} szt. produktu #${product.id}. Pozostało: ${product.stock}`);
+        res.json(product);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 app.patch("/products/:id/stock", async (req, res) => {
     try {
         const { id } = req.params;
