@@ -39,6 +39,7 @@ app.get("/health", (req, res) => {
 });
 
 app.post("/auth/register", async (req, res) => {
+  try {
   const { firstName, lastName, email, password } = req.body;
 
   if (!firstName || !lastName || !email || !password) {
@@ -64,6 +65,9 @@ app.post("/auth/register", async (req, res) => {
     token: signToken(user),
     user: publicUser(user)
   });
+  } catch (error) {
+    return res.status(400).json({ message: "Problem z danymi wejściowymi." });
+  }
 });
 
 app.post("/auth/login", async (req, res) => {
