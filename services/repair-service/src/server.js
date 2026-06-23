@@ -3,9 +3,9 @@ const express = require("express");
 const path = require("path");
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
-const { Op } = require("sequelize");
 const { authMiddleware, requireAdmin } = require("./auth");
 const { Repair, RepairService, sequelize } = require("./db");
+const { getCurrentUser } = require("./userClient");
 
 const app = express();
 const port = process.env.PORT || 4005;
@@ -21,6 +21,20 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.get("/openapi.yaml", (req, res) => res.sendFile(openApiPath));
 
 const repairInclude = [{ model: RepairService }];
+
+function asyncHandler(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
+
+function errorHandler(error, req, res, next) {
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  return res.status(error.status || 500).json({
+    message: error.message || "Wystapil blad serwera."
+  });
+}
 
 function toDate(value) {
   const [year, month, day] = value.split("-").map(Number);
@@ -164,7 +178,7 @@ app.post("/repair-estimate", async (req, res) => {
   });
 });
 
-app.post("/repairs", authMiddleware, async (req, res) => {
+app.post("/repairs", authMiddleware, asyncHandler(async (req, res) => {
   const { bikeDescription, issueDescription, repairServiceId, dropOffDate } = req.body;
 
   if (!bikeDescription || !issueDescription || !repairServiceId || !dropOffDate) {
@@ -176,9 +190,14 @@ app.post("/repairs", authMiddleware, async (req, res) => {
     return res.status(404).json({ message: "Nie znaleziono usługi" });
   }
 
+  const currentUser = await getCurrentUser(req.authToken);
+  if (Number(currentUser.id) !== Number(req.user.id)) {
+    return res.status(401).json({ message: "Token uzytkownika nie pasuje do profilu." });
+  }
+
   const repair = await Repair.create({
     userId: req.user.id,
-    userEmail: req.user.email,
+    userEmail: currentUser.email,
     bikeDescription,
     issueDescription,
     dropOffDate,
@@ -188,7 +207,7 @@ app.post("/repairs", authMiddleware, async (req, res) => {
   });
 
   res.status(201).json(await Repair.findByPk(repair.id, { include: repairInclude }));
-});
+}));
 
 app.get("/repairs", authMiddleware, async (req, res) => {
   const where = req.user.role === "admin" ? {} : { userId: req.user.id };
@@ -237,6 +256,8 @@ app.delete("/repairs", authMiddleware, requireAdmin, async (req, res) => {
   res.json({ deleted });
 });
 
+app.use(errorHandler);
+
 async function seedData() {
   const services = [
     { name: "Szybka regulacja", description: "Regulacja hamulców i przerzutek.", durationHours: 2, price: 89 },
@@ -244,14 +265,6 @@ async function seedData() {
     { name: "Serwis napędu", description: "Wymiana lub czyszczenie łańcucha, kasety i linek.", durationHours: 8, price: 249 },
     { name: "Naprawa poważna", description: "Diagnoza i naprawa wymagająca pracy przez więcej niż jeden dzień.", durationHours: 12, price: 399 }
   ];
-  const names = services.map((service) => service.name);
-
-  await RepairService.destroy({
-    where: {
-      name: { [Op.notIn]: names }
-    }
-  });
-
   for (const service of services) {
     const [record] = await RepairService.findOrCreate({
       where: { name: service.name },
@@ -262,7 +275,15 @@ async function seedData() {
   }
 }
 
-sequelize.sync({ alter: true }).then(seedData).then(() => {
+function shouldSeedDemoRepairServices() {
+  return !["false", "0", "no"].includes(String(process.env.SEED_DEMO_REPAIR_SERVICES || "").toLowerCase());
+}
+
+sequelize.authenticate().then(async () => {
+  if (shouldSeedDemoRepairServices()) {
+    await seedData();
+  }
+}).then(() => {
   app.listen(port, () => {
     console.log(`Repair Service działa na porcie ${port}`);
   });

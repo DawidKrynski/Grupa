@@ -23,7 +23,7 @@ app.get("/health", (req, res) => {
 
 app.post("/orders", authMiddleware, async (req, res) => {
   try {
-    const order = await orderService.createOrder(req.user, req.body);
+    const order = await orderService.createOrder(req.user, req.body, req.authToken);
     res.status(201).json(order);
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message });
@@ -72,7 +72,7 @@ app.post("/orders/:id/retry-payment", authMiddleware, async (req, res) => {
   }
 });
 
-sequelize.sync({ alter: true }).then(() => {
+sequelize.authenticate().then(() => {
   app.listen(port, () => {
     console.log(`Order Service działa na porcie ${port}`);
   });

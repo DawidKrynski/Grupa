@@ -6,11 +6,11 @@ $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 
 $projects = @(
-    @{ Title = "User Service";    Path = "services\user-service";    Command = "npm start";    Port = 4001 },
-    @{ Title = "Product Service"; Path = "services\product-service"; Command = "npm start";    Port = 3002 },
-    @{ Title = "Order Service";   Path = "services\order-service";   Command = "npm start";    Port = 4003 },
+    @{ Title = "User Service";    Path = "services\user-service";    Command = 'npm run migrate; if ($LASTEXITCODE -eq 0) { npm start }';    Port = 4001 },
+    @{ Title = "Product Service"; Path = "services\product-service"; Command = 'npm run migrate; if ($LASTEXITCODE -eq 0) { npm start }';    Port = 3002 },
+    @{ Title = "Order Service";   Path = "services\order-service";   Command = 'npm run migrate; if ($LASTEXITCODE -eq 0) { npm start }';    Port = 4003 },
     @{ Title = "Payment Service"; Path = "services\payment-service"; Command = "npm start";    Port = 4006 },
-    @{ Title = "Repair Service";  Path = "services\repair-service";  Command = "npm start";    Port = 4005 },
+    @{ Title = "Repair Service";  Path = "services\repair-service";  Command = 'npm run migrate; if ($LASTEXITCODE -eq 0) { npm start }';    Port = 4005 },
     @{ Title = "Frontend";        Path = "frontend";                 Command = "npm run dev";  Port = 5173 }
 )
 

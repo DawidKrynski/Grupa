@@ -1,9 +1,14 @@
 const express = require("express");
 const cors = require("cors");
+require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+app.get("/health", (req, res) => {
+    res.json({ status: "ok", service: "payment-service" });
+});
 
 app.post("/payments/process", (req, res) => {
     const { amount, repairId } = req.body;
@@ -32,5 +37,5 @@ app.post("/payments/process", (req, res) => {
     });
 });
 
-const PORT = 4006;
+const PORT = process.env.PORT || 4006;
 app.listen(PORT, () => console.log(`Payment service uruchomiony na porcie ${PORT}`));

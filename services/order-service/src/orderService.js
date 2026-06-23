@@ -1,4 +1,5 @@
 const { Order, OrderItem } = require("./db");
+const { getCurrentUser } = require("./userClient");
 
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || "http://localhost:3002";
 const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || "http://localhost:4006";
@@ -96,7 +97,23 @@ function normalizeItems(items) {
   });
 }
 
-async function createOrder(user, body) {
+async function resolveOrderUser(user, authToken) {
+  const currentUser = await getCurrentUser(authToken);
+
+  if (Number(currentUser.id) !== Number(user.id)) {
+    const error = new Error("Token uzytkownika nie pasuje do profilu.");
+    error.status = 401;
+    throw error;
+  }
+
+  return {
+    ...user,
+    email: currentUser.email
+  };
+}
+
+async function createOrder(user, body, authToken) {
+  const orderUser = await resolveOrderUser(user, authToken);
   const { items, deliveryAddress, paymentMethod } = body;
 
   if (!deliveryAddress || !paymentMethod) {
@@ -134,8 +151,8 @@ async function createOrder(user, body) {
     }
 
     const order = await Order.create({
-      userId: user.id,
-      userEmail: user.email,
+      userId: orderUser.id,
+      userEmail: orderUser.email,
       deliveryAddress,
       paymentMethod,
       status: "pending",

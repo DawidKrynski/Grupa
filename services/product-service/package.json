@@ -4,11 +4,14 @@
   "description": "Product Catalog Service",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node app.js",
+    "migrate": "node src/migrate.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
     "sequelize": "^6.37.3",
     "sqlite3": "^5.1.7"
   }
