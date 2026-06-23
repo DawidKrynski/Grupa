@@ -47,6 +47,7 @@ paths:
             schema:
               $ref: "#/components/schemas/RegisterRequest"
             example:
+              login: janek
               firstName: Jan
               lastName: Kowalski
               email: jan@example.com
@@ -519,19 +520,31 @@ components:
         - email
         - password
       properties:
+        login:
+          type: string
+          description: Opcjonalny login. Jesli nie zostanie podany, loginem bedzie email.
+          minLength: 3
+          maxLength: 40
+          pattern: "^[a-z0-9._-]+$"
+          example: janek
         firstName:
           type: string
+          maxLength: 60
           example: Jan
         lastName:
           type: string
+          maxLength: 60
           example: Kowalski
         email:
           type: string
           format: email
+          maxLength: 254
           example: jan@example.com
         password:
           type: string
           format: password
+          minLength: 8
+          maxLength: 128
           example: haslo123
     LoginRequest:
       type: object

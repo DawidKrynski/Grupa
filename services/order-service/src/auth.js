@@ -1,6 +1,18 @@
 const jwt = require("jsonwebtoken");
+const { JWT_SECRET } = require("./config");
 
-const JWT_SECRET = process.env.JWT_SECRET || "veloshop-secret";
+function normalizeTokenPayload(payload) {
+  const id = Number(payload.sub || payload.id);
+
+  if (!Number.isInteger(id) || id <= 0 || !["customer", "admin"].includes(payload.role)) {
+    throw new Error("Invalid token payload");
+  }
+
+  return {
+    id,
+    role: payload.role
+  };
+}
 
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization || "";
@@ -11,16 +23,17 @@ function authMiddleware(req, res, next) {
   }
 
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    req.authToken = token;
+    req.user = normalizeTokenPayload(jwt.verify(token, JWT_SECRET));
     next();
   } catch {
-    res.status(401).json({ message: "Nieprawidłowy token" });
+    res.status(401).json({ message: "Nieprawidlowy token" });
   }
 }
 
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") {
-    return res.status(403).json({ message: "Brak uprawnień" });
+    return res.status(403).json({ message: "Brak uprawnien" });
   }
 
   next();

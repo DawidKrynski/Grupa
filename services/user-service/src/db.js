@@ -1,4 +1,6 @@
+const path = require("path");
 const { DataTypes, Sequelize } = require("sequelize");
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
 const sequelize = new Sequelize({
   dialect: "sqlite",
@@ -10,7 +12,14 @@ const User = sequelize.define("User", {
   login: {
     type: DataTypes.STRING,
     allowNull: false,
-    defaultValue: ""
+    unique: true,
+    validate: {
+      notEmpty: true,
+      len: [1, 254]
+    },
+    set(value) {
+      this.setDataValue("login", typeof value === "string" ? value.trim().toLowerCase() : value);
+    }
   },
   firstName: {
     type: DataTypes.STRING,
@@ -25,7 +34,11 @@ const User = sequelize.define("User", {
     allowNull: false,
     unique: true,
     validate: {
-      isEmail: true
+      isEmail: true,
+      len: [1, 254]
+    },
+    set(value) {
+      this.setDataValue("email", typeof value === "string" ? value.trim().toLowerCase() : value);
     }
   },
   passwordHash: {
@@ -37,6 +50,11 @@ const User = sequelize.define("User", {
     allowNull: false,
     defaultValue: "customer"
   }
+}, {
+  indexes: [
+    { unique: true, fields: ["login"] },
+    { unique: true, fields: ["email"] }
+  ]
 });
 
 module.exports = { sequelize, User };

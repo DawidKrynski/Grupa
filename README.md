@@ -145,18 +145,35 @@ Każdy serwis uruchamia się w osobnym terminalu.
 ```
 cd services/user-service
 npm install
+npm run migrate
+npm start
+```
+
+Konta demo `user/user` i `admin/admin` sa odtwarzane domyslnie przy starcie `user-service`. Mozna to wylaczyc:
+
+```
+$env:SEED_DEMO_USERS="false"
 npm start
 ```
 
 ```
 cd services/product-service
 npm install
+npm run migrate
+npm start
+```
+
+Produkty demo sa odtwarzane domyslnie przy starcie `product-service`. Mozna to wylaczyc:
+
+```
+$env:SEED_DEMO_PRODUCTS="false"
 npm start
 ```
 
 ```
 cd services/order-service
 npm install
+npm run migrate
 npm start
 ```
 
@@ -169,6 +186,14 @@ npm start
 ```
 cd services/repair-service
 npm install
+npm run migrate
+npm start
+```
+
+Uslugi naprawcze demo sa odtwarzane domyslnie przy starcie `repair-service`. Mozna to wylaczyc:
+
+```
+$env:SEED_DEMO_REPAIR_SERVICES="false"
 npm start
 ```
 
@@ -190,6 +215,8 @@ npm run dev
 | Frontend (Vite) | 5173 |
 
 ## Konta testowe
+
+Konta sa domyslnie odtwarzane przy starcie `user-service`.
 
 - klient: `user` / `user`
 - administrator: `admin` / `admin`

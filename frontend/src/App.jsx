@@ -554,7 +554,7 @@ export default function App() {
     try {
       const updatedProduct = await request(`${PRODUCT_API}/products/${productId}/stock`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ stock: Number(newStock) })
       });
 
@@ -569,7 +569,7 @@ export default function App() {
     try {
       const newProduct = await request(`${PRODUCT_API}/products`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(productData)
       });
 
@@ -586,7 +586,8 @@ export default function App() {
 
     try {
       await request(`${PRODUCT_API}/products/${productId}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers
       });
 
       setProducts(products.filter((p) => p.id !== productId));
