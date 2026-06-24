@@ -13,7 +13,7 @@
 
 VeloShop to internetowa platforma sprzedaży rowerów, części i akcesoriów rowerowych z dodatkową obsługą serwisu naprawczego.
 
-System ma umożliwiać przeglądanie katalogu, składanie zamówień, obsługę płatności, zgłaszanie napraw oraz śledzenie statusu zamówień i napraw.
+System umożliwia przeglądanie katalogu, składanie zamówień, obsługę płatności, zgłaszanie napraw oraz śledzenie statusu zamówień i napraw.
 
 ## 1.1 Aktorzy systemu
 
@@ -73,10 +73,11 @@ GET /users/me
 
 ```json
 {
+  "login": "janek",
   "firstName": "Jan",
   "lastName": "Kowalski",
   "email": "jan@example.com",
-  "password": "hasło123"
+  "password": "haslo123"
 }
 ```
 
@@ -84,8 +85,8 @@ GET /users/me
 
 ```json
 {
-  "email": "jan@example.com",
-  "password": "hasło123"
+  "login": "janek",
+  "password": "haslo123"
 }
 ```
 
@@ -101,17 +102,20 @@ Zakres:
 
 * lista produktów,
 * szczegóły produktu,
-* filtrowanie po kategorii, marce, cenie i dostępności,
+* filtrowanie po nazwie, kategorii, cenie i dostępności,
+* kategorie,
 * ceny,
 * stany magazynowe,
-* rezerwacja produktów przez Order Service i Repair Service.
+* rezerwacja produktów przez Order Service.
 
 Endpointy:
 
 ```txt
 GET /products
+GET /products/categories
 GET /products/:id
 POST /products
+PATCH /products/:id/stock
 DELETE /products/:id
 POST /products/:id/reserve
 ```
@@ -121,7 +125,7 @@ POST /products/:id/reserve
 Query params:
 
 ```txt
-category=&brand=&minPrice=&maxPrice=&available=
+search=&category=&minPrice=&maxPrice=&available=
 ```
 
 ### POST `/products`
@@ -131,7 +135,6 @@ Wymaga JWT i roli `admin`.
 ```json
 {
   "name": "Trek Marlin 5",
-  "brand": "Trek",
   "category": "MTB",
   "price": 2499,
   "stock": 10,
@@ -142,7 +145,7 @@ Wymaga JWT i roli `admin`.
 
 ### POST `/products/:id/reserve`
 
-Endpoint wewnętrzny używany przez Order Service i Repair Service.
+Endpoint wewnętrzny używany przez Order Service.
 
 ```json
 {
@@ -163,6 +166,7 @@ POST /orders
 GET /orders
 GET /orders/:id
 PATCH /orders/:id/status
+POST /orders/:id/retry-payment
 ```
 
 ### POST `/orders`
@@ -203,48 +207,52 @@ cancelled
 
 Mockowa bramka płatności. Symuluje przetwarzanie transakcji.
 
+Serwis jest bezstanowy i nie zapisuje płatności w bazie danych.
+
 Endpointy:
 
 ```txt
-POST /payments
-GET /payments/:id
+POST /payments/process
 ```
 
-### POST `/payments`
+### POST `/payments/process`
 
 ```json
 {
   "orderId": 15,
-  "amount": 2499.00,
-  "paymentMethod": "card"
+  "amount": 2499.00
 }
 ```
 
-Przykładowe statusy:
+Przykładowa odpowiedź:
 
-```txt
-pending
-success
-failed
+```json
+{
+  "success": true,
+  "transactionId": "TXN-ABC123XYZ",
+  "message": "Płatność zrealizowana pomyślnie."
+}
 ```
 
 ---
 
 ## 2.6 Repair Service
 
-Odpowiada za obsługę zleceń serwisowych.
+Odpowiada za obsługę zleceń serwisowych, kalendarz dostępności i wycenę terminu odbioru.
 
-Klient zgłasza usterkę, opisując rower. Może wskazać produkt z katalogu Product Service albo podać własny opis. Serwisant aktualizuje status i dodaje notatki. Serwis może odpytywać Product Service o dostępne części zamienne oraz zlecać płatność w Payment Service.
+Klient zgłasza usterkę, opisując rower. W przepływie frontendu płatność za naprawę jest wykonywana w Payment Service przed utworzeniem zgłoszenia w Repair Service.
 
 Endpointy:
 
 ```txt
 GET /repair-services
-GET /repair-slots
+GET /repair-calendar
+POST /repair-estimate
 POST /repairs
 GET /repairs
 GET /repairs/:id
 PATCH /repairs/:id/status
+DELETE /repairs
 ```
 
 ### POST `/repairs`
@@ -253,11 +261,10 @@ Wymaga JWT.
 
 ```json
 {
-  "productId": 3,
-  "bikeDescription": "Trek Marlin 5, 2022",
-  "issueDescription": "Pęknięta rama, przeskakujące biegi",
+  "bikeDescription": "Rower trekkingowy",
+  "issueDescription": "Problem z hamulcami",
   "repairServiceId": 2,
-  "slotId": 5
+  "dropOffDate": "2026-06-02"
 }
 ```
 
@@ -277,7 +284,6 @@ Przykładowe statusy:
 booked
 accepted
 in_progress
-waiting_for_parts
 ready
 completed
 cancelled
@@ -287,9 +293,9 @@ cancelled
 
 ## 2.7 Frontend React
 
-Frontend będzie aplikacją React działającą w modelu CSR.
+Frontend jest aplikacją React działającą w modelu CSR.
 
-Planowane widoki:
+Widoki:
 
 * strona główna,
 * katalog produktów,
@@ -308,13 +314,13 @@ Planowane widoki:
 
 # 3. Architektura aplikacji
 
-System zostanie zbudowany w architekturze mikroserwisów.
+System jest zbudowany w architekturze mikroserwisów.
 
-Każdy serwis backendowy będzie osobną aplikacją Node.js/Express z własną bazą SQLite obsługiwaną przez Sequelize.
+Każdy serwis backendowy jest osobną aplikacją Node.js/Express. User Service, Product Service, Order Service i Repair Service używają SQLite oraz Sequelize. Payment Service jest mockowym, bezstanowym serwisem płatności.
 
 Frontend React komunikuje się z serwisami przez REST API.
 
-Tożsamość użytkownika będzie przekazywana przez JWT:
+Tożsamość użytkownika jest przekazywana przez JWT:
 
 ```txt
 Authorization: Bearer <token>
@@ -331,16 +337,15 @@ Authorization: Bearer <token>
 
 ## 3.2 Komunikacja między serwisami
 
-Zgodnie z diagramem:
+Zgodnie z aktualnym działaniem aplikacji:
 
 * użytkownik składa zamówienie przez Order Service,
-* użytkownik zleca naprawę przez Repair Service,
+* użytkownik zleca naprawę przez frontend i Repair Service,
 * Order Service autoryzuje użytkownika przez User Service,
 * Repair Service autoryzuje użytkownika przez User Service,
 * Order Service rezerwuje produkty w Product Service,
-* Repair Service rezerwuje produkty w Product Service,
 * Order Service zleca płatność w Payment Service,
-* Repair Service zleca płatność w Payment Service.
+* frontend inicjuje płatność za naprawę w Payment Service przed utworzeniem zgłoszenia w Repair Service.
 
 ## 3.3 Diagram komunikacji
 
@@ -360,15 +365,15 @@ Routes
 
 ## 3.5 Bazy danych
 
-Każdy serwis posiada własną bazę SQLite.
+Serwisy przechowujące dane posiadają własną bazę SQLite.
 
 Planowany podział:
 
 * User Service - użytkownicy, role, dane logowania.
-* Product Service - produkty, kategorie, marki, ceny, stany magazynowe.
+* Product Service - produkty, kategorie, ceny, stany magazynowe.
 * Order Service - zamówienia, pozycje zamówień, statusy.
-* Payment Service - płatności, statusy, kwoty, metody płatności.
-* Repair Service - usługi, terminy, zgłoszenia, statusy, notatki serwisanta.
+* Payment Service - brak własnej bazy, mockowe przetwarzanie płatności.
+* Repair Service - usługi, terminy, zgłoszenia i statusy.
 
 ---
 
@@ -382,14 +387,16 @@ Planowany podział:
 * REST API
 * JWT
 * CORS
+* Swagger UI / OpenAPI
+* Vite
 
 ---
 
 # 5. Podsumowanie
 
-Projekt VeloShop zakłada stworzenie sklepu rowerowego z obsługą zamówień, płatności i napraw.
+Projekt VeloShop tworzy sklep rowerowy z obsługą zamówień, płatności i napraw.
 
-Aplikacja będzie składać się z frontendu React oraz pięciu backendowych serwisów REST:
+Aplikacja składa się z frontendu React oraz pięciu backendowych serwisów REST:
 
 * User Service
 * Product Service
