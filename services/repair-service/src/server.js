@@ -4,11 +4,12 @@ const path = require("path");
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const { authMiddleware, requireAdmin } = require("./auth");
+const { requireEnv } = require("./config");
 const { Repair, RepairService, sequelize } = require("./db");
 const { getCurrentUser } = require("./userClient");
 
 const app = express();
-const port = process.env.PORT || 4005;
+const port = Number(requireEnv("PORT"));
 const openApiPath = path.resolve(__dirname, "../../../docs/openapi.yaml");
 const swaggerDocument = YAML.load(openApiPath);
 const WORK_HOURS_PER_DAY = 8;

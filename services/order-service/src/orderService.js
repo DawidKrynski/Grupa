@@ -1,8 +1,9 @@
 const { Order, OrderItem } = require("./db");
+const { requireEnv } = require("./config");
 const { getCurrentUser } = require("./userClient");
 
-const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || "http://localhost:3002";
-const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || "http://localhost:4006";
+const PRODUCT_SERVICE_URL = requireEnv("PRODUCT_SERVICE_URL");
+const PAYMENT_SERVICE_URL = requireEnv("PAYMENT_SERVICE_URL");
 
 const orderInclude = [{ model: OrderItem }];
 

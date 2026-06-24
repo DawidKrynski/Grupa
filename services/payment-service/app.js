@@ -1,6 +1,15 @@
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
+
+function requireEnv(name) {
+    const value = typeof process.env[name] === "string" ? process.env[name].trim() : "";
+    if (!value) {
+        throw new Error(`${name} must be set in .env`);
+    }
+    return value;
+}
 
 const app = express();
 app.use(cors());
@@ -37,5 +46,5 @@ app.post("/payments/process", (req, res) => {
     });
 });
 
-const PORT = process.env.PORT || 4006;
+const PORT = Number(requireEnv("PORT"));
 app.listen(PORT, () => console.log(`Payment service uruchomiony na porcie ${PORT}`));

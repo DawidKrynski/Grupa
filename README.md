@@ -63,13 +63,6 @@ Zakres:
 - kategorie,
 - ceny i dostępność.
 
-TODO:
-
-- dokładny model produktu,
-- endpointy administracyjne,
-- sposób filtrowania,
-- obsługa stanu magazynowego.
-
 ### Order Service
 
 Odpowiada za zamówienia (port `4003`).

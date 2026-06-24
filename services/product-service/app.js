@@ -2,11 +2,12 @@ const express = require("express");
 const cors = require("cors");
 const { Op, Sequelize } = require("sequelize");
 const { authMiddleware, requireAdmin } = require("./src/auth");
+const { requireEnv } = require("./src/config");
 const { Product, sequelize } = require("./src/db");
 const { seedProducts, shouldSeedDemoProducts } = require("./src/seed");
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const PORT = Number(requireEnv("PORT"));
 
 app.use(cors());
 app.use(express.json());

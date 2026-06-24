@@ -7,10 +7,11 @@ const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const { Op } = require("sequelize");
 const { authMiddleware, JWT_SECRET } = require("./authMiddleware");
+const { requireEnv } = require("./config");
 const { sequelize, User } = require("./db");
 
 const app = express();
-const port = process.env.PORT || 4001;
+const port = Number(requireEnv("PORT"));
 const openApiPath = path.resolve(__dirname, "../../../docs/openapi.yaml");
 const swaggerDocument = YAML.load(openApiPath);
 

@@ -1,4 +1,6 @@
-const USER_SERVICE_URL = process.env.USER_SERVICE_URL || "http://localhost:4001";
+const { requireEnv } = require("./config");
+
+const USER_SERVICE_URL = requireEnv("USER_SERVICE_URL");
 
 async function parseJson(response) {
   try {
