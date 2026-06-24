@@ -31,11 +31,11 @@ Platforma ma umożliwiać przeglądanie produktów, składanie zamówień, opła
 
 ## Architektura aplikacji
 
-Aplikacja będzie podzielona na frontend React oraz kilka backendowych serwisów REST.
+Aplikacja jest podzielona na frontend React oraz kilka backendowych serwisów REST.
 
-Każdy serwis backendowy będzie osobną aplikacją Express z własną odpowiedzialnością. Dane będą przechowywane w relacyjnych bazach SQLite obsługiwanych przez Sequelize.
+Każdy serwis backendowy jest osobną aplikacją Express z własną odpowiedzialnością. Dane są przechowywane w relacyjnych bazach SQLite obsługiwanych przez Sequelize.
 
-Autentykacja użytkownika będzie oparta o JWT.
+Autentykacja użytkownika jest oparta o JWT.
 
 ## Serwisy
 
@@ -216,9 +216,9 @@ Konta sa domyslnie odtwarzane przy starcie `user-service`.
 
 ## Frontend
 
-Frontend będzie aplikacją React działającą w modelu CSR.
+Frontend jest aplikacją React działającą w modelu CSR.
 
-Planowane widoki:
+Widoki:
 
 - strona główna,
 - lista produktów,
