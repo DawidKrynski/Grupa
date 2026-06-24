@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const swaggerUi = require("swagger-ui-express");
+const YAML = require("yamljs");
 require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
 function requireEnv(name) {
@@ -12,8 +14,13 @@ function requireEnv(name) {
 }
 
 const app = express();
+const openApiPath = path.resolve(__dirname, "../../docs/openapi.yaml");
+const swaggerDocument = YAML.load(openApiPath);
+
 app.use(cors());
 app.use(express.json());
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.get("/openapi.yaml", (req, res) => res.sendFile(openApiPath));
 
 app.get("/health", (req, res) => {
     res.json({ status: "ok", service: "payment-service" });
