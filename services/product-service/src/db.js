@@ -1,10 +1,11 @@
 const path = require("path");
 const { DataTypes, Sequelize } = require("sequelize");
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+const { requireEnv } = require("./config");
 
 const sequelize = new Sequelize({
     dialect: "sqlite",
-    storage: process.env.DB_FILE || "./database.sqlite",
+    storage: requireEnv("DB_FILE"),
     logging: false
 });
 

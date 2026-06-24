@@ -4,11 +4,12 @@ const path = require("path");
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const { authMiddleware, requireAdmin } = require("./auth");
+const { requireEnv } = require("./config");
 const { sequelize, ORDER_STATUSES } = require("./db");
 const orderService = require("./orderService");
 
 const app = express();
-const port = process.env.PORT || 4003;
+const port = Number(requireEnv("PORT"));
 const openApiPath = path.resolve(__dirname, "../../../docs/openapi.yaml");
 const swaggerDocument = YAML.load(openApiPath);
 
