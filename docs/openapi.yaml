@@ -2,18 +2,24 @@ openapi: 3.0.3
 info:
   title: VeloShop API
   version: 0.1.0
-  description: API dla serwisu użytkowników, zamówień i serwisu napraw rowerowych.
+  description: API dla serwisów sklepu rowerowego VeloShop.
 servers:
   - url: http://localhost:4001
     description: User Service
+  - url: http://localhost:3002
+    description: Product Service
   - url: http://localhost:4003
     description: Order Service
   - url: http://localhost:4005
     description: Repair Service
+  - url: http://localhost:4006
+    description: Payment Service
 tags:
   - name: User Service
+  - name: Product Service
   - name: Order Service
   - name: Repair Service
+  - name: Payment Service
 security:
   - bearerAuth: []
 paths:
@@ -21,8 +27,10 @@ paths:
     get:
       tags:
         - User Service
+        - Product Service
         - Order Service
         - Repair Service
+        - Payment Service
       summary: Status serwisu
       security: []
       responses:
@@ -113,6 +121,182 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /products:
+    servers:
+      - url: http://localhost:3002
+    get:
+      tags:
+        - Product Service
+      summary: Lista produktów
+      security: []
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: minPrice
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: available
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Lista produktów
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      tags:
+        - Product Service
+      summary: Dodanie produktu
+      description: Endpoint administracyjny.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Produkt utworzony
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /products/categories:
+    servers:
+      - url: http://localhost:3002
+    get:
+      tags:
+        - Product Service
+      summary: Kategorie produktów
+      security: []
+      responses:
+        "200":
+          description: Lista kategorii
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /products/{id}:
+    servers:
+      - url: http://localhost:3002
+    get:
+      tags:
+        - Product Service
+      summary: Szczegóły produktu
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Produkt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      tags:
+        - Product Service
+      summary: Usunięcie produktu
+      description: Endpoint administracyjny.
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Produkt usunięty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+  /products/{id}/reserve:
+    servers:
+      - url: http://localhost:3002
+    post:
+      tags:
+        - Product Service
+      summary: Rezerwacja produktu
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReserveProductRequest"
+      responses:
+        "200":
+          description: Produkt po rezerwacji
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /products/{id}/stock:
+    servers:
+      - url: http://localhost:3002
+    patch:
+      tags:
+        - Product Service
+      summary: Zmiana stanu magazynowego
+      description: Endpoint administracyjny.
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductStockRequest"
+      responses:
+        "200":
+          description: Produkt po zmianie stanu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /payments/process:
+    servers:
+      - url: http://localhost:4006
+    post:
+      tags:
+        - Payment Service
+      summary: Przetworzenie płatności
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentProcessRequest"
+      responses:
+        "200":
+          description: Wynik płatności
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentProcessResponse"
   /orders:
     servers:
       - url: http://localhost:4003
@@ -465,6 +649,13 @@ components:
       schema:
         type: integer
       example: 1
+    ProductId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1
   responses:
     BadRequest:
       description: Nieprawidłowe dane
@@ -512,6 +703,114 @@ components:
         message:
           type: string
           example: Nieprawidłowy login lub hasło
+    DeleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Produkt zostal usuniety.
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Rower górski Kross Hexagon
+        description:
+          type: string
+          example: Rower do jazdy terenowej.
+        price:
+          type: number
+          example: 2499
+        imageUrl:
+          type: string
+          example: https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=500
+        category:
+          type: string
+          example: Rowery
+        stock:
+          type: integer
+          example: 5
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProductInput:
+      type: object
+      required:
+        - name
+        - price
+        - category
+      properties:
+        name:
+          type: string
+          example: Rower miejski
+        description:
+          type: string
+          example: Wygodny rower do miasta.
+        price:
+          type: number
+          example: 1899
+        imageUrl:
+          type: string
+          example: https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=500
+        category:
+          type: string
+          example: Rowery
+        stock:
+          type: integer
+          example: 4
+    ReserveProductRequest:
+      type: object
+      required:
+        - quantity
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+          example: 1
+    UpdateProductStockRequest:
+      type: object
+      required:
+        - stock
+      properties:
+        stock:
+          type: integer
+          minimum: 0
+          example: 8
+    PaymentProcessRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        orderId:
+          type: integer
+          example: 1
+        repairId:
+          type: integer
+          example: 1
+        amount:
+          type: number
+          example: 249
+    PaymentProcessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        transactionId:
+          type: string
+          example: TXN-ABC123XYZ
+        message:
+          type: string
+          example: Płatność zrealizowana pomyślnie.
     RegisterRequest:
       type: object
       required:

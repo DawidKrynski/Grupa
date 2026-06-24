@@ -1,5 +1,8 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
+const swaggerUi = require("swagger-ui-express");
+const YAML = require("yamljs");
 const { Op, Sequelize } = require("sequelize");
 const { authMiddleware, requireAdmin } = require("./src/auth");
 const { requireEnv } = require("./src/config");
@@ -8,9 +11,13 @@ const { seedProducts, shouldSeedDemoProducts } = require("./src/seed");
 
 const app = express();
 const PORT = Number(requireEnv("PORT"));
+const openApiPath = path.resolve(__dirname, "../../docs/openapi.yaml");
+const swaggerDocument = YAML.load(openApiPath);
 
 app.use(cors());
 app.use(express.json());
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.get("/openapi.yaml", (req, res) => res.sendFile(openApiPath));
 
 app.get("/health", (req, res) => {
     res.json({ status: "ok", service: "product-service" });
